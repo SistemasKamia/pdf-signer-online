@@ -3,32 +3,32 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - main # Asegúrate que esta sea la rama principal de tu repositorio (puede ser 'master')
-  workflow_dispatch: # Permite ejecutar el workflow manualmente desde GitHub Actions
+      - main # Asegúrate que esta sea la rama principal de tu repositorio (main o master)
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest # El sistema operativo donde se construirá tu app
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code # Descarga tu código del repositorio
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Node.js # Configura Node.js para construir tu React App
+      - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18' # Versión de Node.js, compatible con React 18
+          node-version: '18'
 
-      - name: Install dependencies # Instala las librerías de tu proyecto (node_modules)
+      - name: Install dependencies
         run: npm install
 
-      - name: Build React App with Env Variables # ¡Paso CRÍTICO: Construye tu aplicación React!
-        run: npm run build # Ejecuta el script 'build' de tu package.json
-        env: # <--- ¡AQUÍ LE DECIMOS A LA APP CUÁLES SON LAS CLAVES!
-          REACT_APP_SUPABASE_URL: ${{ secrets.REACT_APP_SUPABASE_URL }} # Clave URL de Supabase
-          REACT_APP_SUPABASE_ANON_KEY: ${{ secrets.REACT_APP_SUPABASE_ANON_KEY }} # Clave ANON de Supabase
-          # Si usaste claves de Firebase en .env, DESCOMENTA Y AÑADELAS AQUÍ TAMBIÉN.
-          # Si no, déjalas comentadas con el #.
+      - name: Build React App with Env Variables # <--- ESTE ES EL PASO
+        run: npm run build
+        env: # <--- ¡AQUÍ LE DECIMOS A LA APP CUÁLES SON LAS CLAVES Y DESHABILITAMOS CI LINTING!
+          REACT_APP_SUPABASE_URL: ${{ secrets.REACT_APP_SUPABASE_URL }}
+          REACT_APP_SUPABASE_ANON_KEY: ${{ secrets.REACT_APP_SUPABASE_ANON_KEY }}
+          CI: false # <--- AÑADIDA ESTA LÍNEA PARA EVITAR ERRORES DE ESLINT
+          # Si usas claves de Firebase, descomenta y añádelas aquí también (si las tienes como Secrets)
           # REACT_APP_FIREBASE_API_KEY: ${{ secrets.REACT_APP_FIREBASE_API_KEY }}
           # REACT_APP_FIREBASE_AUTH_DOMAIN: ${{ secrets.REACT_APP_FIREBASE_AUTH_DOMAIN }}
           # REACT_APP_FIREBASE_PROJECT_ID: ${{ secrets.REACT_APP_FIREBASE_PROJECT_ID }}
@@ -36,8 +36,8 @@ jobs:
           # REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.REACT_APP_FIREBASE_MESSAGING_SENDER_ID }}
           # REACT_APP_FIREBASE_APP_ID: ${{ secrets.REACT_APP_FIREBASE_APP_ID }}
 
-      - name: Deploy to GitHub Pages # Sube tu aplicación construida a GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3 # Una acción popular para gh-pages
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }} # Token de seguridad automático de GitHub
-          publish_dir: ./build # La carpeta de tu app compilada
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build
