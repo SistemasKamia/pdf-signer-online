@@ -874,6 +874,7 @@ function App() {
 
       // Realizar un 'upsert' en la tabla 'process_states' de Supabase
       // Si el 'id' (processId) ya existe, actualiza; si no, inserta uno nuevo.
+      // eslint-disable-next-line no-unused-vars
       const { data, error } = await supabase
         .from('process_states')
         .upsert(
