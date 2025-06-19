@@ -2,6 +2,7 @@
   "name": "mi-visor-de-pdfs",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://Sistemas27.github.io/pdf-signer-online",
   "dependencies": {
     "@supabase/supabase-js": "^2.50.0",
     "base64-arraybuffer": "^1.0.2",
@@ -12,13 +13,16 @@
     "react-pdf": "^8.0.0",
     "react-scripts": "5.0.1",
     "react-signature-canvas": "^1.0.1",
-    "web-vitals": "^5.0.3"
+    "web-vitals": "^5.0.3",
+    "gh-pages": "^6.1.1"
   },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build"
   },
   "eslintConfig": {
     "extends": [
