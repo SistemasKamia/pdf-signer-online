@@ -3,7 +3,7 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - main # Asegúrate que esta sea la rama principal de tu repositorio (main o master)
+      - main
   workflow_dispatch:
 
 jobs:
@@ -22,13 +22,13 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build React App with Env Variables # <--- ESTE ES EL PASO
+      - name: Build React App with Env Variables
         run: npm run build
-        env: # <--- ¡AQUÍ LE DECIMOS A LA APP CUÁLES SON LAS CLAVES Y DESHABILITAMOS CI LINTING!
+        env:
           REACT_APP_SUPABASE_URL: ${{ secrets.REACT_APP_SUPABASE_URL }}
           REACT_APP_SUPABASE_ANON_KEY: ${{ secrets.REACT_APP_SUPABASE_ANON_KEY }}
-          CI: false # <--- AÑADIDA ESTA LÍNEA PARA EVITAR ERRORES DE ESLINT
-          # Si usas claves de Firebase, descomenta y añádelas aquí también (si las tienes como Secrets)
+          CI: false # ¡Asegúrate que esta línea esté aquí para evitar que ESLint falle el build!
+          # Si usas claves de Firebase, descomenta y añádelas aquí también.
           # REACT_APP_FIREBASE_API_KEY: ${{ secrets.REACT_APP_FIREBASE_API_KEY }}
           # REACT_APP_FIREBASE_AUTH_DOMAIN: ${{ secrets.REACT_APP_FIREBASE_AUTH_DOMAIN }}
           # REACT_APP_FIREBASE_PROJECT_ID: ${{ secrets.REACT_APP_FIREBASE_PROJECT_ID }}
