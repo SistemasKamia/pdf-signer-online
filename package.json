@@ -18,7 +18,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "REACT_APP_SUPABASE_URL=$REACT_APP_SUPABASE_URL REACT_APP_SUPABASE_ANON_KEY=$REACT_APP_SUPABASE_ANON_KEY react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "predeploy": "npm run build",
