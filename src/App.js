@@ -9,9 +9,9 @@ import { decode as arrayBufferDecode, encode as arrayBufferEncode } from 'base64
 // Importar Supabase Client
 import { createClient } from '@supabase/supabase-js';
 
-// Importar Firebase Auth (se mantiene para la estructura, pero no requiere claves si no se usa)
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+// Eliminar importaciones de Firebase si no se usa
+// import { initializeApp } from 'firebase/app';
+// import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 
 // *********************************************************************************
 // ¡SOLUCIÓN FINAL Y MÁS ROBUSTA PARA EL WORKER CON LA VERSIÓN ESPECÍFICA DETECTADA EN CONSOLA!
@@ -31,8 +31,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Inicializar Firebase (para autenticación anónima y obtener userId)
-// Si no se proporcionan variables de entorno de Firebase, se usarán valores por defecto/placeholders.
+// Eliminar inicialización de Firebase si no se usa
+/*
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "dummy-api-key",
   authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "dummy-auth-domain.firebaseapp.com",
@@ -41,21 +41,19 @@ const firebaseConfig = {
   messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "dummy-sender-id",
   appId: process.env.REACT_APP_FIREBASE_APP_ID || "dummy-app-id",
 };
-
-// Intentar inicializar Firebase App solo si hay una clave API real o se está en un entorno con token inicial
 let firebaseApp;
 if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "dummy-api-key") {
   firebaseApp = initializeApp(firebaseConfig);
 } else {
   console.warn("No se encontraron claves de Firebase reales en .env. La autenticación anónima podría no funcionar en ciertos despliegues.");
-  // Crear una aplicación Firebase mínima para que getAuth no falle, pero sin credenciales reales.
   firebaseApp = initializeApp({ apiKey: "temp", authDomain: "temp", projectId: "temp", appId: "temp" });
 }
 const auth = getAuth(firebaseApp);
+*/
 
 
 // Función para generar un ID único para el proceso (usado para la URL y Supabase)
-const generateUniqueProcessId = () => Math.random().toString(36).substr(2, 9);
+const generateUniqueId = () => Math.random().toString(36).substr(2, 9); // Renombrada para uso general
 
 function App() {
   // --- Estados de la aplicación ---
@@ -109,45 +107,29 @@ function App() {
   const [hasSignatureApplied, setHasSignatureApplied] = useState(false); // Indica si ya se incrustó al menos una firma
   const [showHelpModal, setShowHelpModal] = useState(false); // Controla la visibilidad del modal de ayuda
   const [processId, setProcessId] = useState(null); // ID único para el proceso actual (para URL y Supabase)
-  const [userId, setUserId] = useState(null); // ID del usuario autenticado (Firebase UID)
-  const [isAuthReady, setIsAuthReady] = useState(false); // Bandera para indicar si la autenticación de Firebase está lista
+  const [userId, setUserId] = useState(null); // ID del usuario (generado localmente)
+  const [isAuthReady, setIsAuthReady] = useState(true); // Siempre true, ya que no hay autenticación externa
 
 
-  // EFECTO 1: Autenticación con Firebase al inicio
-  // Intenta iniciar sesión de forma anónima para obtener un userId.
+  // EFECTO 1: Generación de userId local al inicio (REEMPLAZA AUTENTICACIÓN DE FIREBASE)
   useEffect(() => {
-    const setupAuth = async () => {
-      onAuthStateChanged(auth, async (user) => {
-        if (user) {
-          setUserId(user.uid);
-        } else {
-          try {
-            // Intentar iniciar sesión anónimamente si no hay usuario logueado
-            // Esto es crucial para obtener un userId y permitir guardar en Supabase.
-            await signInAnonymously(auth);
-            setUserId(auth.currentUser?.uid); // Obtener el UID del usuario anónimo
-          } catch (error) {
-            console.error("Error signing in anonymously:", error);
-            setErrorMessage("Error de autenticación. Algunas funciones de guardado/carga no estarán disponibles.");
-            setTimeout(() => setErrorMessage(''), 7000);
-          }
-        }
-        setIsAuthReady(true); // Marcar que la autenticación está lista, incluso si falló el login
-      });
-    };
-    setupAuth();
+    // Intentar cargar userId de sessionStorage o generar uno nuevo
+    let currentUserId = sessionStorage.getItem('app_user_id');
+    if (!currentUserId) {
+      currentUserId = generateUniqueId();
+      sessionStorage.setItem('app_user_id', currentUserId); // Guarda en sessionStorage para persistir entre recargas
+    }
+    setUserId(currentUserId);
+    setIsAuthReady(true); // Marcar que "autenticación" está lista
+    console.log("UserID de sesión:", currentUserId);
   }, []); // Se ejecuta solo una vez al montar la aplicación
 
 
   // EFECTO 2: Carga inicial de la aplicación y gestión del processId en URL
-  // Este efecto se encarga de leer el ID del proceso de la URL y cargar el estado guardado,
-  // o generar un nuevo ID si no existe.
   useEffect(() => {
-    // Asegurarse de que la autenticación esté lista y tengamos un userId antes de intentar cargar
-    if (!isAuthReady || !userId) {
-      console.log("Esperando que la autenticación esté lista y userId disponible...");
-      return;
-    }
+    // No necesitamos esperar por isAuthReady o userId aquí, ya que el userId se genera localmente
+    // y estará disponible casi de inmediato.
+    if (!userId) return; // Asegurarse de que userId ya se haya establecido
 
     const loadInitialProcess = async () => {
       const hash = window.location.hash; // Obtener la parte del hash de la URL (ej. "#proceso=XYZ")
@@ -162,6 +144,7 @@ function App() {
             .from('process_states')
             .select('state_data') // Solo necesitamos la columna 'state_data'
             .eq('id', idFromUrl) // Buscar por el ID de proceso
+            .eq('user_id', userId) // CRUCIAL: Solo cargar si el user_id coincide (por RLS)
             .single(); // Esperar un solo resultado
 
           if (error && error.code !== 'PGRST116') { // 'PGRST116' es el código para "no row found"
@@ -199,12 +182,12 @@ function App() {
             setTimeout(() => setErrorMessage(''), 3000); // Limpiar mensaje después de 3 segundos
           } else {
             // Si el ID estaba en la URL pero no se encontró un estado guardado en Supabase,
-            // significa que el enlace puede ser viejo o inválido. Se inicia un nuevo proceso.
-            console.warn('ID en URL pero no hay proceso guardado en Supabase para este ID. Iniciando un nuevo proceso.');
-            const newId = generateUniqueProcessId(); // Generar un nuevo ID único
+            // significa que el enlace puede ser viejo o inválido, o no pertenece a este usuario.
+            console.warn('ID en URL pero no hay proceso guardado en Supabase para este ID o no es tuyo. Iniciando un nuevo proceso.');
+            const newId = generateUniqueId(); // Generar un nuevo ID único
             setProcessId(newId); // Establecer el nuevo ID
             window.location.hash = `proceso=${newId}`; // Actualizar la URL con el nuevo ID
-            setErrorMessage('Proceso no encontrado para el ID en URL. Iniciando uno nuevo.');
+            setErrorMessage('Proceso no encontrado o no autorizado. Iniciando uno nuevo.');
             setTimeout(() => setErrorMessage(''), 5000); // Limpiar mensaje
             // Los estados de la aplicación se mantendrán en sus valores iniciales (limpios) por defecto.
           }
@@ -213,13 +196,13 @@ function App() {
           console.error('Error al cargar proceso desde URL (posiblemente ID corrupto o problema de red/Supabase):', e);
           setErrorMessage('Error al cargar proceso. Se iniciará uno nuevo.');
           setTimeout(() => setErrorMessage(''), 5000); // Limpiar mensaje
-          const newId = generateUniqueProcessId(); // Generar un nuevo ID para el nuevo proceso
+          const newId = generateUniqueId(); // Generar un nuevo ID para el nuevo proceso
           setProcessId(newId);
           window.location.hash = `proceso=${newId}`; // Actualizar la URL
         }
       } else {
         // Si no hay ningún ID en la URL al inicio, generar uno nuevo y establecerlo.
-        const newId = generateUniqueProcessId();
+        const newId = generateUniqueId();
         setProcessId(newId);
         window.location.hash = `proceso=${newId}`; // Esto actualizará la URL en el navegador
       }
@@ -234,7 +217,8 @@ function App() {
         URL.revokeObjectURL(fileUrl);
       }
     };
-  }, [isAuthReady, userId]); // Este efecto se ejecuta solo una vez cuando la autenticación y userId están listos.
+  }, [userId]); // Este efecto se ejecuta cuando userId está disponible.
+
 
   // Efecto para liberar la URL del archivo al desmontar el componente (redundante con el de arriba, pero seguro)
   useEffect(() => {
@@ -274,7 +258,7 @@ function App() {
       const pdfLeftInViewer = (pdfPageRect.left - viewerRect.left) + scrollX;
       const pdfTopInViewer = (pdfPageRect.top - viewerRect.top) + scrollY;
       const pdfRightInViewer = pdfLeftInViewer + pdfPageRect.width;
-      const pdfBottomInViewer = pdfTopInViewer + pdfPageRect.height;
+      const pdfBottomInViewer = pdfTopInViewer + pdfPageInViewer.height; // Error: pdfPageInViewer.height -> pdfPageRect.height
 
       const defaultWidth = signatureBox1Size.width;
       const defaultHeight = signatureBox1Size.height;
@@ -385,9 +369,9 @@ function App() {
     setHasSignatureApplied(false); // Resetear si se han aplicado firmas
     setShowHelpModal(false); // Asegurar que el modal de ayuda está cerrado
 
-    // NUEVO: Generar un nuevo processId y actualizar la URL al cargar un nuevo PDF
+    // Generar un nuevo processId y actualizar la URL al cargar un nuevo PDF
     // Esto asegura una URL única para cada nuevo archivo cargado.
-    const newId = generateUniqueProcessId();
+    const newId = generateUniqueId(); // Usar la función general
     setProcessId(newId);
     window.location.hash = `proceso=${newId}`; // Actualizar el hash de la URL en el navegador
 
@@ -475,9 +459,12 @@ function App() {
   };
 
   const onStartInteraction = (e) => { // Usado para onMouseDown y onTouchStart
-    // Solo permitir interacción si no hay ningún proceso activo (firma o ayuda)
-    if (e.target.closest('.signature-box-1') || e.target.closest('.signature-box-1-resize-handle') || e.target.closest('.signature-box-2') || e.target.closest('.signature-box-3-modal') || e.target.closest('.modal-overlay') || showHelpModal) {
-      // Prevenir el arrastre del PDF si se interactúa con las cajas o modales
+    // Prevenir el comportamiento por defecto del navegador para arrastre y zoom táctil
+    e.preventDefault(); 
+    e.stopPropagation(); // Evitar que el evento se propague si es un elemento interactivo anidado
+
+    // Solo permitir interacción si no hay ningún proceso activo (firma o ayuda) y no es el lienzo de firma del modal
+    if (e.target.closest('.signature-box-1') || e.target.closest('.signature-box-1-resize-handle') || e.target.closest('.signature-box-2') || e.target.closest('.signature-box-3-modal') || showHelpModal) {
       return;
     }
 
@@ -644,7 +631,7 @@ function App() {
     return () => { // Función de limpieza para remover listeners al desmontar
       // Remover eventos de ratón
       window.removeEventListener('mouseup', onEndInteraction);
-      window.removeEventListener('mousemove', onMoveEventListener);
+      window.removeEventListener('mousemove', onMoveInteraction); // ¡CORREGIDO!
       window.removeEventListener('mouseleave', onLeaveWindowGlobal);
 
       // Remover eventos táctiles
@@ -658,6 +645,7 @@ function App() {
   // Handler para iniciar el arrastre del recuadro de firma (Recuadro 1)
   const onSignatureBoxStart = (e) => { // Usado para onMouseDown y onTouchStart
     e.stopPropagation(); // Prevenir que el evento se propague al visor del PDF
+    e.preventDefault(); // ¡NUEVO Y CRUCIAL! Evitar comportamiento de scroll/zoom del navegador
 
     // Si el clic/toque es en un handle de redimensionamiento, no iniciar el arrastre de la caja completa
     if (e.target.classList.contains('signature-box-1-resize-handle')) {
@@ -682,6 +670,7 @@ function App() {
   // Handler para iniciar el redimensionamiento del recuadro de firma (Recuadro 1)
   const onResizeHandleStart = (e, type) => { // Usado para onMouseDown y onTouchStart
     e.stopPropagation(); // Prevenir que el evento se propague
+    e.preventDefault(); // ¡NUEVO Y CRUCIAL! Evitar comportamiento de scroll/zoom del navegador
     setIsResizingBox(true); // Activar redimensionamiento
     setResizeHandleType(type); // Establecer el tipo de handle (ej. 'br' (bottom-right), 'bl' (bottom-left))
     const { clientX, clientY } = getEventClientCoords(e);
@@ -689,7 +678,7 @@ function App() {
     setInitialBoxRect({
       x: signatureBox1Pos.x,
       y: signatureBox1Pos.y,
-      width: signatureBox1Size.width,
+      width: signatureBox1Size.width, // ¡CORREGIDO!
       height: signatureBox1Size.height,
     });
     setInitialMousePos({ x: clientX, y: clientY });
@@ -877,9 +866,9 @@ function App() {
       setTimeout(() => setErrorMessage(''), 3000);
       return;
     }
-    // Asegurarse de que tenemos un ID de proceso y un ID de usuario autenticado
+    // Asegurarse de que tenemos un ID de proceso y un ID de usuario
     if (!processId || !userId) {
-        setErrorMessage('Error: ID de proceso o usuario no disponible. Asegúrate de estar conectado a internet y la app autenticada.');
+        setErrorMessage('Error: ID de proceso o usuario no disponible. Intenta recargar la página.');
         setTimeout(() => setErrorMessage(''), 7000);
         return;
     }
@@ -1030,7 +1019,7 @@ function App() {
           <button
             className="action-button save-process-button"
             onClick={handleSaveProcess}
-            disabled={!selectedFile || showHelpModal || !processId || !userId || !isAuthReady} // Deshabilitado si falta PDF/ID/Auth o si modal de ayuda abierto
+            disabled={!selectedFile || showHelpModal || !processId || !userId} // isAuthReady ya no es necesario
             title="Guarda el estado actual de tu trabajo (incluyendo el PDF y el recuadro de firma si está activo) en línea. Se asocia a esta URL única para que puedas continuar más tarde o compartirla."
           >
             Guardar Proceso 💾
@@ -1040,7 +1029,7 @@ function App() {
           <button
             className="action-button"
             onClick={handleShareButton}
-            disabled={!selectedFile || !processId || showHelpModal || !isAuthReady} // Habilitado si hay PDF y processId
+            disabled={!selectedFile || !processId || showHelpModal} // isAuthReady ya no es necesario
             title="Copia la URL única de este proceso al portapapeles para compartirlo con otros."
           >
             Compartir 📤
