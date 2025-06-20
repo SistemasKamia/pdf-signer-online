@@ -36,7 +36,7 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "dummy-api-key",
   authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "dummy-auth-domain.firebaseapp.com",
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || "dummy-project-id",
+  projectId: process.env.APP_FIREBASE_PROJECT_ID || "dummy-project-id", // Corregido: REACT_APP_FIREBASE_PROJECT_ID
   storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "dummy-bucket.appspot.com",
   messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "dummy-sender-id",
   appId: process.env.REACT_APP_FIREBASE_APP_ID || "dummy-app-id",
@@ -258,7 +258,7 @@ function App() {
       const pdfLeftInViewer = (pdfPageRect.left - viewerRect.left) + scrollX;
       const pdfTopInViewer = (pdfPageRect.top - viewerRect.top) + scrollY;
       const pdfRightInViewer = pdfLeftInViewer + pdfPageRect.width;
-      const pdfBottomInViewer = pdfTopInViewer + pdfPageInViewer.height; // Error: pdfPageInViewer.height -> pdfPageRect.height
+      const pdfBottomInViewer = pdfTopInViewer + pdfPageRect.height; // CORREGIDO: pdfPageInViewer.height -> pdfPageRect.height
 
       const defaultWidth = signatureBox1Size.width;
       const defaultHeight = signatureBox1Size.height;
@@ -631,7 +631,7 @@ function App() {
     return () => { // Función de limpieza para remover listeners al desmontar
       // Remover eventos de ratón
       window.removeEventListener('mouseup', onEndInteraction);
-      window.removeEventListener('mousemove', onMoveInteraction); // ¡CORREGIDO!
+      window.removeEventListener('mousemove', onMoveInteraction); 
       window.removeEventListener('mouseleave', onLeaveWindowGlobal);
 
       // Remover eventos táctiles
@@ -662,7 +662,7 @@ function App() {
     setInitialBoxRect({
       x: signatureBox1Pos.x,
       y: signatureBox1Pos.y,
-      width: signatureBox1Size.width,
+      width: signatureBox1Size.width, 
       height: signatureBox1Size.height,
     });
   };
