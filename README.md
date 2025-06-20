@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
@@ -73,3 +74,7 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/t
 # pdf-signer-online
 Aplicación web para visualizar y firmar PDFs online.
 >>>>>>> d2aaa82191ac10272f591a6d7aa4faa8c812f112
+=======
+# pdf-signer-online
+Aplicación web para visualizar y firmar PDFs online.
+>>>>>>> 2744999cb03220916e4c8333fa58ac7889532ee1
