@@ -39,14 +39,14 @@ body {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  padding: 10px; /* Reducido */
+  padding: 10px; /* Padding general, se ajustará en móviles */
   box-sizing: border-box;
-  overflow-x: hidden;
+  overflow-x: hidden; /* Previene scroll horizontal indeseado */
 }
 
 #root {
   width: 100%;
-  max-width: 1200px; /* Ancho máximo más pequeño */
+  max-width: 1200px; /* Ancho máximo para escritorio */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -58,13 +58,14 @@ body {
   flex-direction: column;
   align-items: center;
   width: 100%;
-  max-width: 900px; /* Ancho principal del contenido más pequeño */
+  max-width: 900px; /* Ancho principal del contenido para escritorio */
   background-color: var(--card-bg-light);
-  border-radius: 15px; /* Ligeramente menos redondeado */
+  border-radius: 15px; /* Bordes redondeados */
   box-shadow: 0px 8px 25px var(--shadow-medium);
-  padding: 20px; /* Reducido */
-  border: 1px solid var(--primary-blue-soft); /* Borde sutil del color principal */
-  height: calc(100% - 40px); /* Ajusta la altura para que ocupe el espacio sin desbordar */
+  padding: 20px; /* Padding interno, se ajustará en móviles */
+  border: 1px solid var(--primary-blue-soft); /* Borde sutil */
+  height: calc(100% - 20px); /* Ajusta la altura para ocupar espacio sin desbordar el padding del body */
+  box-sizing: border-box; /* Incluye padding y borde en el tamaño total */
 }
 
 /* Ocultamos el título de la app ya que no lo queremos */
@@ -72,49 +73,51 @@ body {
   display: none;
 }
 
-/* Encabezado superior (ahora solo con el título si se decide mostrar) */
+/* Encabezado superior */
 .app-header {
   width: 100%;
   display: flex;
-  flex-direction: row; /* En escritorio, será fila vacía o con título */
-  justify-content: flex-end; /* Alinea lo que haya a la derecha */
+  flex-direction: row; /* Fila por defecto en escritorio */
+  justify-content: flex-end; /* Alinea contenido a la derecha en escritorio */
   align-items: center;
-  margin-bottom: 0px; /* Ya no hay elementos abajo, elimina margen */
-  padding-bottom: 0px; /* No hay botones aquí, elimina padding */
-  border-bottom: none; /* Elimina borde inferior, ya no separa botones */
-  min-height: 20px; /* Pequeña altura para que no colapse */
+  margin-bottom: 0px; /* Sin margen inferior en escritorio */
+  padding-bottom: 0px; /* Sin padding inferior */
+  border-bottom: none; /* Sin borde inferior */
+  min-height: 20px; /* Altura mínima para que no colapse */
 }
 
 .header-action-buttons {
-  display: none; /* Asegura que no se muestren por si acaso */
+  display: none; /* Estos botones no se muestran, su funcionalidad está en top-control-panel */
 }
 
 /* Estilos generales para los botones */
 .action-button,
 .upload-button,
-.pdf-top-navigation button { /* También afecta a botones de navegación de PDF */
+.pdf-top-navigation button {
   background-color: var(--primary-blue-soft);
   color: var(--text-dark);
-  padding: 8px 15px; /* Reducido */
+  padding: 8px 15px;
   border: none;
-  border-radius: 6px; /* Menos redondeado */
+  border-radius: 6px;
   cursor: pointer;
   font-weight: bold;
   transition: background-color 0.3s ease, transform 0.1s ease, box-shadow 0.3s ease;
-  box-shadow: 0px 2px 5px var(--shadow-soft); /* Sombra más sutil */
-  font-size: 0.9em; /* Reducido */
+  box-shadow: 0px 2px 5px var(--shadow-soft);
+  font-size: 0.9em;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px; /* Reducido */
-  min-width: 100px; /* Reducido */
+  gap: 6px;
+  min-width: 100px;
+  box-sizing: border-box; /* Incluye padding y borde en el tamaño total */
+  text-decoration: none; /* Para usar con <label> que actúan como botones */
 }
 
 .action-button:hover,
 .upload-button:hover,
 .pdf-top-navigation button:hover:not(:disabled) {
   background-color: #8bbdff;
-  transform: translateY(-1px); /* Efecto de elevación más pequeño */
+  transform: translateY(-1px);
   box-shadow: 0px 3px 8px var(--shadow-medium);
 }
 
@@ -125,8 +128,10 @@ body {
   box-shadow: 0px 1px 3px var(--shadow-soft);
 }
 
-/* ESTILO AÑADIDO: Para todos los botones deshabilitados */
-.action-button:disabled {
+/* ESTILO PARA TODOS LOS BOTONES DESHABILITADOS */
+.action-button:disabled,
+.upload-button:disabled,
+.pdf-top-navigation button:disabled {
   background-color: #ccc; /* Gris claro */
   color: #666; /* Gris oscuro */
   cursor: not-allowed;
@@ -134,7 +139,6 @@ body {
   transform: translateY(0);
   box-shadow: none;
 }
-
 
 .action-button.primary-action {
   background-color: var(--accent-green-soft);
@@ -144,16 +148,16 @@ body {
 }
 
 .action-button.help-button {
-    background-color: var(--border-light); /* Usar border-light para un gris suave */
+    background-color: var(--border-light);
     color: var(--text-dark);
 }
 .action-button.help-button:hover {
-    background-color: #d8dee3; /* Un gris ligeramente más oscuro al pasar el ratón */
+    background-color: #d8dee3;
 }
 
 /* Estilo para el botón "Guardar Proceso" */
 .save-process-button {
-    background-color: #4CAF50; /* Un verde más distintivo */
+    background-color: #4CAF50;
     color: white;
 }
 
@@ -161,10 +165,9 @@ body {
     background-color: #45a049;
 }
 
-
 /* Estilos específicos para el botón "Seleccionar archivo" */
 .select-file-button {
-  min-width: 140px; /* Reducido */
+  min-width: 140px;
 }
 
 /* Contenido principal de la aplicación */
@@ -173,58 +176,63 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 15px; /* Ajustado el gap */
-  flex-grow: 1; /* Permite que el contenido principal ocupe espacio vertical */
+  gap: 15px; /* Espacio entre secciones */
+  flex-grow: 1; /* Permite que el contenido principal ocupe el espacio vertical disponible */
+  box-sizing: border-box;
 }
 
 /* Panel de control superior (seleccionar archivo y botones de acción) */
 .top-control-panel {
   width: 100%;
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center; /* Centra todos los botones y textos */
+  flex-wrap: wrap; /* Permite que los elementos se envuelvan a la siguiente línea */
+  justify-content: center; /* Centra los elementos */
   align-items: center;
-  gap: 10px; /* Reducido */
+  gap: 10px; /* Espacio entre botones */
   background-color: var(--card-bg-light);
   padding: 15px;
   border-radius: 10px;
   box-shadow: 0px 3px 10px var(--shadow-soft);
   border: 1px solid var(--border-light);
-  margin-top: 20px; /* Asegura un margen superior con el header (que ahora está vacío) */
+  margin-top: 20px; /* Margen superior con el header */
+  box-sizing: border-box;
 }
 
 /* Estilos para el texto de estado del archivo */
 .file-status-text {
   color: var(--text-medium);
-  font-size: 0.85em; /* Reducido */
-  margin: 0 8px; /* Reducido */
-  min-width: 120px; /* Reducido */
+  font-size: 0.85em;
+  margin: 0 8px;
+  min-width: 120px;
   text-align: left;
+  /* Se ajustará en móvil para centrar */
 }
 .file-status-text.default-status {
     font-style: italic;
-    color: var(--text-medium); /* Usar text-medium para el gris por defecto */
+    color: var(--text-medium);
 }
 
-/* Estilos para mensajes de error */
+/* Estilos para mensajes de error/éxito */
 .error-message {
   color: var(--error-red);
   font-weight: bold;
   margin-top: 0;
   margin-bottom: 0;
-  padding: 10px; /* Reducido */
-  border-radius: 6px; /* Reducido */
-  font-size: 0.85em; /* Reducido */
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 0.85em;
   box-shadow: 0px 1px 5px var(--shadow-soft);
   width: 100%;
-  max-width: calc(100% - 30px); /* Ajusta padding */
-  border: 1px solid var(--error-red); /* Borde del mensaje de error */
-  background-color: rgba(231, 76, 60, 0.1); /* Fondo más suave para error */
+  max-width: calc(100% - 30px); /* Ajusta por el padding interno */
+  border: 1px solid var(--error-red);
+  background-color: rgba(231, 76, 60, 0.1);
+  text-align: center; /* Centra el texto del mensaje */
+  box-sizing: border-box;
 }
 
-/* Controles de navegación de páginas (AHORA DENTRO DE top-control-panel) */
+/* Controles de navegación de páginas (Anterior / Siguiente) */
 .pdf-top-navigation {
-  width: 100%;
+  width: 100%; /* Ocupa todo el ancho en el panel de control */
   display: flex;
   justify-content: center;
   align-items: center;
@@ -232,9 +240,10 @@ body {
   background-color: var(--secondary-blue-soft);
   padding: 8px 15px;
   border-radius: 8px;
-  margin-top: 15px;
+  margin-top: 15px; /* Margen superior con el resto de botones */
   box-shadow: 0px 2px 8px var(--shadow-soft);
   color: var(--text-dark);
+  box-sizing: border-box;
 }
 
 .pdf-top-navigation button {
@@ -252,8 +261,8 @@ body {
 }
 
 .pdf-top-navigation button:disabled {
-  background-color: #ccc; /* Color de fondo para botones deshabilitados */
-  color: #666; /* Color de texto para botones deshabilitados */
+  background-color: #ccc;
+  color: #666;
   cursor: not-allowed;
   opacity: 0.7;
 }
@@ -261,21 +270,26 @@ body {
 .pdf-top-navigation .page-indicator {
   font-size: 0.9em;
   min-width: 80px;
+  text-align: center;
 }
-
 
 /* Contenedor del visor de PDF */
 .pdf-viewer-container {
   border: 2px solid var(--primary-blue-soft);
   border-radius: 12px;
-  overflow: hidden;
+  overflow: hidden; /* Oculta el contenido que se sale de los bordes */
   width: 100%;
   background-color: var(--card-bg-light);
   box-shadow: 0px 6px 20px var(--shadow-strong);
-  min-height: 450px;
+  min-height: 450px; /* Altura mínima para escritorio */
   position: relative;
-  padding-bottom: 10px;
-  flex-grow: 1;
+  padding-bottom: 10px; /* Pequeño padding inferior para el scrollbar */
+  flex-grow: 1; /* Permite que ocupe el espacio restante vertical */
+  box-sizing: border-box;
+  display: flex; /* Para centrar el pdf-document-wrapper */
+  justify-content: center;
+  align-items: center;
+  flex-direction: column; /* Permite que el zoom indicator y el placeholder estén por encima */
 }
 
 /* Estilos para el contenedor del Document y Page de react-pdf */
@@ -283,11 +297,13 @@ body {
   position: relative;
   width: 100%;
   height: 100%;
-  display: block;
-  overflow: auto;
-  cursor: grab;
-  padding: 15px 0;
-  user-select: none;
+  display: block; /* Asegura que el scroll funciona correctamente */
+  overflow: auto; /* Permite el scroll del PDF */
+  cursor: grab; /* Cursor para arrastrar el PDF */
+  padding: 15px 0; /* Padding interno para que el PDF no toque los bordes */
+  user-select: none; /* Evita selección de texto al arrastrar */
+  box-sizing: border-box;
+  /* Estilos para el scrollbar (Webkit) */
   &::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -302,19 +318,19 @@ body {
 }
 
 .pdf-document-wrapper:active {
-  cursor: grabbing;
+  cursor: grabbing; /* Cambia el cursor al arrastrar */
 }
 
 /* Estilos para la página renderizada por react-pdf (el lienzo real) */
 .react-pdf__Page {
-  margin: 10px auto;
-  display: block;
+  margin: 10px auto; /* Centra la página vertical y horizontalmente */
+  display: block; /* Asegura que se comporte como un bloque */
   box-shadow: 0px 3px 10px var(--shadow-medium);
   background-color: white;
-  transition: transform 0.05s ease-out;
+  transition: transform 0.05s ease-out; /* Transición suave para el zoom */
   transform-origin: center center;
   position: relative;
-  flex-shrink: 0;
+  flex-shrink: 0; /* Evita que la página se encoja */
 }
 
 /* Propiedades para mejorar la calidad de renderizado del canvas */
@@ -346,8 +362,8 @@ body {
   padding: 8px 12px;
   border-radius: 8px;
   font-size: 0.9em;
-  pointer-events: none;
-  opacity: 0;
+  pointer-events: none; /* No interfiere con clics en el PDF */
+  opacity: 0; /* Oculto por defecto */
   transition: opacity 0.2s ease-in-out;
   z-index: 10;
   box-shadow: 0px 2px 8px var(--shadow-medium);
@@ -355,7 +371,7 @@ body {
   text-align: center;
 }
 .zoom-indicator.visible {
-  opacity: 1;
+  opacity: 1; /* Visible cuando está activo */
 }
 
 /* Placeholder cuando no hay PDF cargado */
@@ -369,20 +385,31 @@ body {
   color: var(--text-medium);
   text-align: center;
   box-shadow: inset 0px 0px 10px rgba(0, 0, 0, 0.1);
+  display: flex; /* Para centrar el texto verticalmente */
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  flex-grow: 1; /* Para que ocupe el espacio disponible */
+  width: 100%;
+  box-sizing: border-box;
+}
+.no-pdf-placeholder p {
+  margin: 0;
 }
 
-/* Estilos para el texto informativo */
+
+/* Estilos para el texto informativo (generalmente debajo del error) */
 .app-main-content > p {
   margin-top: 20px;
   color: var(--text-medium);
   font-size: 0.85em;
 }
 
-/* Estilos del Recuadro de Firma 1 */
+/* Estilos del Recuadro de Firma 1 (el que se arrastra y redimensiona) */
 .signature-box-1 {
   position: absolute;
   border: 2px dashed var(--error-red);
-  background-color: rgba(255, 255, 255, 0.7);
+  background-color: rgba(255, 255, 255, 0.7); /* Fondo semi-transparente */
   box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.4);
   z-index: 5;
   display: flex;
@@ -391,18 +418,17 @@ body {
   align-items: center;
   padding: 5px;
   cursor: grab; /* Cursor predeterminado para arrastre */
-  overflow: hidden;
+  overflow: hidden; /* Oculta contenido si se sale */
+  box-sizing: border-box;
 }
 
-/* Clases añadidas para controlar el cursor cuando la caja está activa y siendo arrastrada/redimensionada */
-/* No es necesario un active-signature-box ya que solo hay una caja a la vez en este flujo */
+/* Clases para controlar el cursor cuando la caja está activa y siendo arrastrada/redimensionada */
 .signature-box-1.is-dragging {
   cursor: grabbing !important; /* Fuerza el cursor de arrastre */
 }
 
 .signature-box-1.is-resizing {
-  /* El cursor se maneja por los handles individuales, pero si necesitas un fallback */
-  cursor: default !important;
+  cursor: default !important; /* El cursor se maneja por los handles individuales */
 }
 
 .signature-box-1-content {
@@ -431,6 +457,7 @@ body {
   border: none;
   font-weight: bold;
   transition: background-color 0.2s ease;
+  box-sizing: border-box;
 }
 
 .signature-box-1-button.cancel-button {
@@ -456,23 +483,23 @@ body {
   height: 15px;
   background-color: var(--primary-blue-soft);
   border: 1px solid var(--text-dark);
-  border-radius: 50%;
+  border-radius: 50%; /* Circular */
   z-index: 6;
 }
 
 .signature-box-1-resize-handle.bottom-right {
-  bottom: -7px;
+  bottom: -7px; /* Para que quede la mitad fuera de la caja */
   right: -7px;
-  cursor: nwse-resize !important; /* Asegura que el cursor siempre se aplique */
+  cursor: nwse-resize !important;
 }
 
 .signature-box-1-resize-handle.bottom-left {
   bottom: -7px;
   left: -7px;
-  cursor: nesw-resize !important; /* Asegura que el cursor siempre se aplique */
+  cursor: nesw-resize !important;
 }
 
-/* Estilos del Recuadro de Firma 2 */
+/* Estilos del Recuadro de Firma 2 (confirmación estática) */
 .signature-box-2 {
   position: absolute;
   border: 2px solid var(--primary-blue-soft);
@@ -485,6 +512,7 @@ body {
   align-items: center;
   padding: 10px;
   user-select: none;
+  box-sizing: border-box;
 }
 
 .signature-box-2-content {
@@ -512,6 +540,7 @@ body {
   border: none;
   font-weight: bold;
   transition: background-color 0.2s ease;
+  box-sizing: border-box;
 }
 
 .signature-box-2-button.cancel-button {
@@ -530,7 +559,7 @@ body {
   background-color: #8bbdff;
 }
 
-/* Estilos del Recuadro de Firma 3 como MODAL */
+/* Estilos del Recuadro de Firma 3 como MODAL (dibujo de firma) */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -553,23 +582,24 @@ body {
   flex-direction: column;
   justify-content: space-between;
   align-items: center;
-  width: 80vw;
-  max-width: 700px;
-  height: 70vh;
-  max-height: 500px;
+  width: 80vw; /* Ancho en relación al viewport */
+  max-width: 700px; /* Ancho máximo para escritorio */
+  height: 70vh; /* Altura en relación al viewport */
+  max-height: 500px; /* Altura máxima para escritorio */
   z-index: 1001;
+  box-sizing: border-box;
 }
 
-.signature-box-3-drawing-area { /* Nuevo div para contener el canvas */
+.signature-box-3-drawing-area { /* Contenedor para el canvas */
   flex-grow: 1;
   width: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
-  overflow: hidden;
+  overflow: hidden; /* Evita desbordamiento del canvas */
 }
 
-.signature-box-3-modal h2 { /* Título del modal de dibujo */
+.signature-box-3-modal h2 { /* Título del modal */
     margin-top: 0;
     margin-bottom: 15px;
     color: var(--text-dark);
@@ -577,10 +607,10 @@ body {
     text-align: center;
 }
 
-.signature-box-3 .signature-canvas-modal { /* Estilo para el canvas DENTRO del modal */
+.signature-box-3 .signature-canvas-modal { /* Estilo para el canvas dentro del modal */
   border: 1px solid var(--border-light);
   border-radius: 4px;
-  touch-action: none;
+  touch-action: none; /* Importante para dispositivos táctiles */
   background-color: white;
   display: block;
   margin: 0 auto;
@@ -591,7 +621,8 @@ body {
   gap: 10px;
   margin-top: 15px;
   width: 100%;
-  justify-content: space-around;
+  justify-content: space-around; /* Distribuye los botones */
+  flex-wrap: wrap; /* Permite que los botones se envuelvan en pantallas pequeñas */
 }
 
 .signature-box-3-button {
@@ -602,9 +633,11 @@ body {
   border: none;
   font-weight: bold;
   transition: background-color 0.2s ease, transform 0.1s ease;
-  flex-grow: 1;
+  flex-grow: 1; /* Permite que los botones crezcan para ocupar espacio */
   text-align: center;
   box-shadow: 0px 2px 5px var(--shadow-soft);
+  box-sizing: border-box;
+  min-width: 100px; /* Ancho mínimo para los botones del modal */
 }
 
 .signature-box-3-button.cancel-button {
@@ -641,18 +674,19 @@ body {
 
 /* NUEVO ESTILO: Modal de Ayuda */
 .help-modal {
-  position: relative; /* Necesario para posicionar el botón de cerrar */
+  position: relative;
   background-color: var(--card-bg-light);
   border-radius: 15px;
   box-shadow: 0px 10px 30px rgba(0, 0, 0, 0.6);
   padding: 30px;
-  width: 90vw;
-  max-width: 800px; /* Ancho máximo para el modal de ayuda */
-  max-height: 90vh; /* Altura máxima para el modal de ayuda */
+  width: 90vw; /* Ancho en relación al viewport */
+  max-width: 800px; /* Ancho máximo para escritorio */
+  max-height: 90vh; /* Altura máxima para escritorio */
   overflow-y: auto; /* Permite scroll si el contenido es demasiado largo */
   z-index: 1001;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
 }
 
 .help-modal-title {
@@ -695,7 +729,7 @@ body {
   align-self: center;
   margin-top: 20px;
   min-width: 120px;
-  background-color: var(--primary-blue-soft); /* Color para el botón de cerrar */
+  background-color: var(--primary-blue-soft);
   color: var(--text-dark);
 }
 
@@ -704,142 +738,213 @@ body {
 }
 
 
-/* Responsividad */
+/* --- RESPONSIVIDAD --- */
+
+/* Para pantallas más grandes que 768px (escritorio y tablets grandes) */
 @media (min-width: 769px) {
   .app-header {
-    justify-content: flex-end;
+    justify-content: flex-end; /* Alinea los elementos del encabezado a la derecha */
   }
 }
 
+/* Para pantallas de hasta 768px de ancho (móviles y tablets pequeñas) */
 @media (max-width: 768px) {
   html, body, #root {
-    height: 100%;
+    height: 100%; /* Asegura que ocupen toda la altura */
+  }
+  body {
+    padding: 8px; /* Reduce el padding global del body */
   }
   .app-container {
-    padding: 10px;
-    border-radius: 8px;
+    padding: 15px; /* Reduce el padding del contenedor principal */
+    border-radius: 10px; /* Ligeramente menos redondeado */
+    height: calc(100% - 16px); /* Ajusta altura por el padding del body */
   }
 
   .app-title {
-    display: none;
+    display: none; /* Mantiene el título oculto en móviles */
   }
 
   .app-header {
     margin-bottom: 15px;
     padding-bottom: 10px;
-    flex-direction: column;
-    gap: 10px;
+    flex-direction: column; /* Apila los elementos del encabezado */
+    gap: 10px; /* Espacio entre elementos apilados */
   }
 
   .header-action-buttons {
-    display: none;
+    display: none; /* Siguen ocultos */
   }
 
+  /* Navegación de páginas (Anterior/Siguiente) */
   .pdf-top-navigation {
-    flex-direction: column;
+    flex-direction: column; /* Botones apilados */
     gap: 8px;
-    padding: 8px;
+    padding: 10px;
     margin-top: 10px;
   }
 
   .pdf-top-navigation button {
-    width: 100%;
-    padding: 8px 10px;
-    font-size: 0.85em;
+    width: 100%; /* Ocupan todo el ancho disponible */
+    padding: 10px 15px;
+    font-size: 0.9em;
+  }
+  .pdf-top-navigation .page-indicator {
+    font-size: 1em; /* Texto de página más visible */
   }
 
+
+  /* Panel de control superior (botones principales) */
   .top-control-panel {
-    flex-direction: column;
-    gap: 10px;
-    padding: 10px;
+    flex-direction: column; /* Botones apilados */
+    gap: 12px;
+    padding: 15px;
   }
 
   .action-button,
   .select-file-button {
-    width: 100%;
-    min-width: unset;
-    padding: 10px 15px;
-    font-size: 0.9em;
+    width: 100%; /* Ocupan todo el ancho */
+    min-width: unset; /* Elimina el mínimo para que se adapte */
+    padding: 12px 15px; /* Más padding para facilitar el toque */
+    font-size: 1em; /* Un poco más grande para legibilidad */
   }
 
   .file-status-text {
-    text-align: center;
+    text-align: center; /* Centra el texto de estado */
     width: 100%;
     margin-top: 8px;
+    font-size: 0.9em; /* Un poco más grande */
   }
 
+  .error-message {
+    padding: 12px;
+    font-size: 0.9em;
+  }
+
+  /* Visor de PDF */
   .pdf-viewer-container {
-    min-height: 280px;
-    height: auto;
+    min-height: 350px; /* Altura mínima para móviles */
+    height: auto; /* Permite que la altura se ajuste al contenido */
   }
-
   .pdf-document-wrapper {
     height: auto;
-    min-height: 200px;
+    min-height: 250px; /* Altura mínima del wrapper scrollable */
   }
 
+  /* Recuadros de Firma (1, 2, 3 - redimensionados para móvil) */
   .signature-box-1,
   .signature-box-2,
-  .signature-box-3 {
-    width: 150px;
-    height: 75px;
+  .signature-box-3 { /* El modal 3 también se adapta en general con el viewport */
+    width: 180px; /* Ancho por defecto reducido */
+    height: 90px; /* Altura por defecto reducida */
     padding: 5px;
   }
   .signature-box-1-content,
   .signature-box-2-content {
-    font-size: 0.7em;
+    font-size: 0.75em; /* Texto más pequeño pero legible */
   }
   .signature-box-1-button,
-  .signature-box-2-button,
-  .signature-box-3-button {
-    padding: 4px 8px;
-    font-size: 0.8em;
+  .signature-box-2-button {
+    padding: 6px 12px;
+    font-size: 0.85em; /* Botones internos más pequeños */
   }
   .signature-box-1-resize-handle {
-    width: 12px;
-    height: 12px;
+    width: 14px; /* Manijas de redimensionamiento ligeramente más pequeñas */
+    height: 14px;
   }
 
+  /* Indicador de Zoom */
   .zoom-indicator {
-    right: 8px;
-    font-size: 0.8em;
-    padding: 5px 8px;
+    right: 10px;
+    font-size: 0.85em;
+    padding: 6px 10px;
   }
 
-  /* Responsividad para el botón de añadir firma con emoji en móviles */
+  /* Botón de añadir firma con emoji en móviles */
   .emoji-add-button {
-    width: unset; /* Deja que el padding y contenido definan el ancho */
-    flex-grow: 0; /* No debe crecer para ocupar todo el ancho en móviles */
-    font-size: 1.5em; /* Emoji más grande en móvil para que sea fácil de tocar */
-    padding: 5px 10px; /* Ajusta el padding */
+    width: 60px; /* Ancho fijo para que el emoji sea prominente */
+    height: 48px; /* Altura para que sea un cuadrado */
+    min-width: unset;
+    padding: 0; /* Elimina padding para centrar mejor el emoji */
+    font-size: 1.8em; /* Hace el emoji más grande */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .emoji-add-button span { /* Si el emoji está dentro de un span */
+    line-height: 1; /* Ajusta la altura de línea */
   }
 
-  /* Responsividad para el modal de ayuda en móviles */
+
+  /* Modal de Ayuda en móviles */
   .help-modal {
     padding: 20px;
     max-width: 95vw;
     font-size: 0.9em;
   }
   .help-modal-title {
-    font-size: 1.5em;
+    font-size: 1.6em;
   }
   .help-modal-subtitle {
-    font-size: 1.1em;
+    font-size: 1.2em;
   }
   .help-modal-list,
   .help-modal-buttons-list {
     padding-left: 20px;
   }
+  .help-modal-close-button {
+    font-size: 0.95em;
+    padding: 10px 15px;
+  }
+
+  /* Botones del modal de firma (Recuadro 3) en móviles */
+  .signature-box-3-button {
+    flex-grow: 1; /* Permite que los botones se distribuyan */
+    padding: 12px 10px; /* Ajusta padding */
+    font-size: 0.9em; /* Reduce el tamaño de la fuente */
+    min-width: 100px;
+  }
 }
 
+/* Ajustes adicionales para pantallas muy pequeñas (celulares muy pequeños) */
 @media (max-width: 480px) {
   body {
     padding: 5px;
   }
   .app-container {
     padding: 10px;
+    border-radius: 8px;
+    height: calc(100% - 10px); /* Ajusta altura por el padding del body */
+  }
+  .top-control-panel {
+    padding: 10px;
+  }
+  .action-button,
+  .select-file-button {
+    padding: 10px 12px;
+    font-size: 0.9em;
+  }
+  .pdf-top-navigation {
+    padding: 8px;
   }
   .help-modal {
     padding: 15px;
+    font-size: 0.85em;
+  }
+  .help-modal-title {
+    font-size: 1.4em;
+  }
+  .help-modal-subtitle {
+    font-size: 1em;
+  }
+  .signature-box-3-button {
+    padding: 10px 8px;
+    font-size: 0.85em;
+    min-width: 80px;
+  }
+  .emoji-add-button {
+    width: 50px; /* Más pequeño para móviles muy pequeños */
+    height: 40px;
+    font-size: 1.5em;
   }
 }

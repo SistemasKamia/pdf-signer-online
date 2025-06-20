@@ -9,7 +9,7 @@ import { decode as arrayBufferDecode, encode as arrayBufferEncode } from 'base64
 // Importar Supabase Client
 import { createClient } from '@supabase/supabase-js';
 
-// Importar Firebase Auth
+// Importar Firebase Auth (se mantiene para la estructura, pero no requiere claves si no se usa)
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 
@@ -465,30 +465,44 @@ function App() {
     setScale((prevScale) => Math.max(0.5, Math.min(prevScale + delta, 3.0))); // Limitar zoom entre 0.5 y 3.0
   };
 
-  const onMouseDownPDFViewer = (e) => {
-    // Solo permitir arrastrar el PDF si no hay ningún proceso activo (firma o ayuda)
-    if (e.target.closest('.signature-box-1') || e.target.closest('.signature-box-1-resize-handle') || e.target.closest('.signature-box-2') || e.target.closest('.signature-box-3-modal') || showHelpModal) {
+  // --- MODIFICACIÓN IMPORTANTE: Unificar manejadores de ratón y táctiles ---
+
+  const getEventClientCoords = (e) => {
+    if (e.touches && e.touches.length > 0) {
+      return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+    }
+    return { clientX: e.clientX, clientY: e.clientY };
+  };
+
+  const onStartInteraction = (e) => { // Usado para onMouseDown y onTouchStart
+    // Solo permitir interacción si no hay ningún proceso activo (firma o ayuda)
+    if (e.target.closest('.signature-box-1') || e.target.closest('.signature-box-1-resize-handle') || e.target.closest('.signature-box-2') || e.target.closest('.signature-box-3-modal') || e.target.closest('.modal-overlay') || showHelpModal) {
+      // Prevenir el arrastre del PDF si se interactúa con las cajas o modales
       return;
     }
+
     if (viewerRef.current) {
       setIsDragging(true);
-      setStartX(e.pageX - viewerRef.current.offsetLeft);
-      setStartY(e.pageY - viewerRef.current.offsetTop);
+      const { clientX, clientY } = getEventClientCoords(e);
+      setStartX(clientX - viewerRef.current.offsetLeft);
+      setStartY(clientY - viewerRef.current.offsetTop);
       setScrollLeftInitial(viewerRef.current.scrollLeft);
       setScrollTopInitial(viewerRef.current.scrollTop);
       viewerRef.current.style.cursor = 'grabbing'; // Cambiar cursor a "grabbing"
     }
   };
 
-  const onMouseMoveGlobal = useCallback((e) => {
+  const onMoveInteraction = useCallback((e) => { // Usado para onMouseMove y onTouchMove
     // Si no estamos arrastrando el PDF, redimensionando o arrastrando el recuadro, salir
     if (!isDragging && !isResizingBox && !isDraggingBox) return;
-    e.preventDefault(); // Prevenir el comportamiento por defecto del navegador (ej. selección de texto)
+    e.preventDefault(); // Prevenir el comportamiento por defecto del navegador (ej. selección de texto, scroll)
+
+    const { clientX, clientY } = getEventClientCoords(e);
 
     if (isDragging) { // Lógica para arrastrar el PDF
       if (viewerRef.current) {
-        const x = e.pageX - viewerRef.current.offsetLeft;
-        const y = e.pageY - viewerRef.current.offsetTop;
+        const x = clientX - viewerRef.current.offsetLeft;
+        const y = clientY - viewerRef.current.offsetTop;
         const walkX = (x - startX); // Distancia arrastrada en X
         const walkY = (y - startY); // Distancia arrastrada en Y
         viewerRef.current.scrollLeft = scrollLeftInitial - walkX; // Mover scroll horizontalmente
@@ -497,7 +511,7 @@ function App() {
     } else if (isResizingBox) { // Lógica para redimensionar el recuadro de firma (Recuadro 1)
       // Asegurarse de que las referencias iniciales existan
       if (!initialBoxRect || !initialMousePos) {
-          console.warn('initialBoxRect o initialMousePos es null en onMouseMoveGlobal (redimensionamiento). Saltando.');
+          console.warn('initialBoxRect o initialMousePos es null en onMoveInteraction (redimensionamiento). Saltando.');
           return;
       }
 
@@ -517,14 +531,14 @@ function App() {
       const pdfRightInViewer = pdfLeftInViewer + pdfPageRect.width;
       const pdfBottomInViewer = pdfTopInViewer + pdfPageRect.height;
 
-      const mouseCurrentX = e.clientX;
-      const mouseCurrentY = e.clientY;
+      const mouseCurrentX = clientX;
+      const mouseCurrentY = clientY;
 
       let newWidth = initialBoxRect.width;
       let newHeight = initialBoxRect.height;
 
-      const mouseDeltaX = mouseCurrentX - initialMousePos.x; // Cambio en posición X del ratón
-      const mouseDeltaY = mouseCurrentY - initialMousePos.y; // Cambio en posición Y del ratón
+      const mouseDeltaX = mouseCurrentX - initialMousePos.x; // Cambio en posición X del ratón/dedo
+      const mouseDeltaY = mouseCurrentY - initialMousePos.y; // Cambio en posición Y del ratón/dedo
 
       const MIN_BOX_SIZE = 50; // Tamaño mínimo para el recuadro
 
@@ -577,9 +591,9 @@ function App() {
       const pdfRightInViewer = pdfLeftInViewer + pdfPageRect.width;
       const pdfBottomInViewer = pdfTopInViewer + pdfPageRect.height;
 
-      // Calcular la nueva posición del recuadro basándose en el movimiento del ratón y el offset inicial
-      const newX = (e.clientX - viewerRect.left) + scrollX - boxDragOffsetX;
-      const newY = (e.clientY - viewerRect.top) + scrollY - boxDragOffsetY;
+      // Calcular la nueva posición del recuadro basándose en el movimiento del ratón/dedo y el offset inicial
+      const newX = (clientX - viewerRect.left) + scrollX - boxDragOffsetX;
+      const newY = (clientY - viewerRect.top) + scrollY - boxDragOffsetY;
 
       // Limitar las coordenadas para que el recuadro no se salga de la página PDF
       let finalX = Math.max(pdfLeftInViewer, Math.min(newX, pdfRightInViewer - signatureBox1Size.width));
@@ -594,9 +608,7 @@ function App() {
     signatureBox1Pos, signatureBox1Size, boxDragOffsetX, boxDragOffsetY
   ]);
 
-
-  // Handler global para cuando el ratón se suelta (finaliza arrastre/redimensionamiento)
-  const onMouseUpGlobal = useCallback(() => {
+  const onEndInteraction = useCallback(() => { // Usado para onMouseUp y onTouchEnd
     setIsDragging(false);
     setIsDraggingBox(false);
     setIsResizingBox(false);
@@ -609,41 +621,56 @@ function App() {
     }
   }, []);
 
-  // Handler global para cuando el ratón sale de la ventana (detiene arrastre/redimensionamiento)
-  const onMouseLeaveGlobal = useCallback(() => {
+  // Handler global para cuando el puntero sale de la ventana (detiene arrastre/redimensionamiento)
+  const onLeaveWindowGlobal = useCallback(() => { // Usado para onMouseLeave
     if (isDragging || isDraggingBox || isResizingBox) {
-      onMouseUpGlobal(); // Finalizar cualquier operación activa
+      onEndInteraction(); // Finalizar cualquier operación activa
     }
-  }, [isDragging, isDraggingBox, isResizingBox, onMouseUpGlobal]);
+  }, [isDragging, isDraggingBox, isResizingBox, onEndInteraction]);
 
 
   // Configuración de listeners de eventos globales al montar el componente
   useEffect(() => {
-    window.addEventListener('mouseup', onMouseUpGlobal);
-    window.addEventListener('mousemove', onMouseMoveGlobal);
-    window.addEventListener('mouseleave', onMouseLeaveGlobal);
+    // Eventos de ratón
+    window.addEventListener('mouseup', onEndInteraction);
+    window.addEventListener('mousemove', onMoveInteraction);
+    window.addEventListener('mouseleave', onLeaveWindowGlobal); // Para cuando el ratón sale de la ventana
+
+    // Eventos táctiles
+    window.addEventListener('touchend', onEndInteraction);
+    window.addEventListener('touchmove', onMoveInteraction, { passive: false }); // `passive: false` para permitir preventDefault
+    window.addEventListener('touchcancel', onEndInteraction); // En caso de interrupción táctil
+
     return () => { // Función de limpieza para remover listeners al desmontar
-      window.removeEventListener('mouseup', onMouseUpGlobal);
-      window.removeEventListener('mousemove', onMouseMoveGlobal);
-      window.removeEventListener('mouseleave', onMouseLeaveGlobal);
+      // Remover eventos de ratón
+      window.removeEventListener('mouseup', onEndInteraction);
+      window.removeEventListener('mousemove', onMoveEventListener);
+      window.removeEventListener('mouseleave', onLeaveWindowGlobal);
+
+      // Remover eventos táctiles
+      window.removeEventListener('touchend', onEndInteraction);
+      window.removeEventListener('touchmove', onMoveInteraction);
+      window.removeEventListener('touchcancel', onEndInteraction);
     };
-  }, [onMouseUpGlobal, onMouseMoveGlobal, onMouseLeaveGlobal]);
+  }, [onEndInteraction, onMoveInteraction, onLeaveWindowGlobal]);
+
 
   // Handler para iniciar el arrastre del recuadro de firma (Recuadro 1)
-  const onSignatureBoxMouseDown = (e) => {
+  const onSignatureBoxStart = (e) => { // Usado para onMouseDown y onTouchStart
     e.stopPropagation(); // Prevenir que el evento se propague al visor del PDF
 
-    // Si el clic es en un handle de redimensionamiento, no iniciar el arrastre de la caja completa
+    // Si el clic/toque es en un handle de redimensionamiento, no iniciar el arrastre de la caja completa
     if (e.target.classList.contains('signature-box-1-resize-handle')) {
         return;
     }
 
     setIsDraggingBox(true); // Activar arrastre del recuadro
+    const { clientX, clientY } = getEventClientCoords(e);
     // Calcular offset del clic dentro del recuadro
-    setBoxDragOffsetX(e.clientX - e.currentTarget.getBoundingClientRect().left);
-    setBoxDragOffsetY(e.clientY - e.currentTarget.getBoundingClientRect().top);
-    // Guardar posición inicial del ratón y el recuadro para cálculos precisos al mover
-    setInitialMousePos({ x: e.clientX, y: e.clientY });
+    setBoxDragOffsetX(clientX - e.currentTarget.getBoundingClientRect().left);
+    setBoxDragOffsetY(clientY - e.currentTarget.getBoundingClientRect().top);
+    // Guardar posición inicial del ratón/dedo y el recuadro para cálculos precisos al mover
+    setInitialMousePos({ x: clientX, y: clientY });
     setInitialBoxRect({
       x: signatureBox1Pos.x,
       y: signatureBox1Pos.y,
@@ -653,19 +680,21 @@ function App() {
   };
 
   // Handler para iniciar el redimensionamiento del recuadro de firma (Recuadro 1)
-  const onResizeHandleMouseDown = (e, type) => {
+  const onResizeHandleStart = (e, type) => { // Usado para onMouseDown y onTouchStart
     e.stopPropagation(); // Prevenir que el evento se propague
     setIsResizingBox(true); // Activar redimensionamiento
-    setResizeHandleType(type); // Establecer el tipo de handle (ej. 'br', 'bl')
-    // Guardar posición inicial del recuadro y del ratón para cálculos de redimensionamiento
+    setResizeHandleType(type); // Establecer el tipo de handle (ej. 'br' (bottom-right), 'bl' (bottom-left))
+    const { clientX, clientY } = getEventClientCoords(e);
+    // Guardar posición inicial del recuadro y del ratón/dedo para cálculos de redimensionamiento
     setInitialBoxRect({
       x: signatureBox1Pos.x,
       y: signatureBox1Pos.y,
       width: signatureBox1Size.width,
       height: signatureBox1Size.height,
     });
-    setInitialMousePos({ x: e.clientX, y: e.clientY });
+    setInitialMousePos({ x: clientX, y: clientY });
   };
+
 
   // Variable de conveniencia para deshabilitar botones si hay un proceso activo (firma o modal de ayuda)
   const isProcessActive = showSignatureBox1 || showSignatureBox2 || showSignatureBox3 || showHelpModal;
@@ -814,9 +843,9 @@ function App() {
             setShowSignatureBox2(true); // Si hay un error, volver al paso de confirmación del área
         }
     } else {
-        console.warn('No se dibujó ninguna firma.');
-        setErrorMessage('Por favor, dibuja una firma antes de confirmar.');
-        setTimeout(() => setErrorMessage(''), 3000);
+      console.warn('No se dibujó ninguna firma.');
+      setErrorMessage('Por favor, dibuja una firma antes de confirmar.');
+      setTimeout(() => setErrorMessage(''), 3000);
     }
   };
 
@@ -1048,7 +1077,8 @@ function App() {
               className="pdf-document-wrapper"
               onWheel={handleZoom} // Habilitar zoom con rueda del ratón
               ref={viewerRef} // Referencia para controlar scroll
-              onMouseDown={onMouseDownPDFViewer} // Iniciar arrastre del PDF
+              onMouseDown={onStartInteraction} // Iniciar arrastre del PDF (ratón)
+              onTouchStart={onStartInteraction} // Iniciar arrastre del PDF (táctil)
             >
               <Document
                 file={fileUrl} // La URL Blob del PDF
@@ -1076,7 +1106,8 @@ function App() {
                     width: signatureBox1Size.width + 'px',
                     height: signatureBox1Size.height + 'px',
                   }}
-                  onMouseDown={onSignatureBoxMouseDown} // Iniciar arrastre del recuadro
+                  onMouseDown={onSignatureBoxStart} // Iniciar arrastre del recuadro (ratón)
+                  onTouchStart={onSignatureBoxStart} // Iniciar arrastre del recuadro (táctil)
                 >
                   <div className="signature-box-1-buttons">
                     <button className="signature-box-1-button cancel-button" onClick={handleCancelSignatureBox1}>❌</button>
@@ -1085,11 +1116,13 @@ function App() {
                   {/* Handles de redimensionamiento */}
                   <div
                     className="signature-box-1-resize-handle bottom-right"
-                    onMouseDown={(e) => onResizeHandleMouseDown(e, 'br')}
+                    onMouseDown={(e) => onResizeHandleStart(e, 'br')} // Iniciar redimensionamiento (ratón)
+                    onTouchStart={(e) => onResizeHandleStart(e, 'br')} // Iniciar redimensionamiento (táctil)
                   ></div>
                   <div
                     className="signature-box-1-resize-handle bottom-left"
-                    onMouseDown={(e) => onResizeHandleMouseDown(e, 'bl')}
+                    onMouseDown={(e) => onResizeHandleStart(e, 'bl')} // Iniciar redimensionamiento (ratón)
+                    onTouchStart={(e) => onResizeHandleStart(e, 'bl')} // Iniciar redimensionamiento (táctil)
                   ></div>
                 </div>
               )}
