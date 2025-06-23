@@ -6,7 +6,7 @@ import SignatureCanvas from 'react-signature-canvas';
 import { PDFDocument } from 'pdf-lib';
 import { decode as arrayBufferDecode, encode as arrayBufferEncode } from 'base64-arraybuffer';
 
-import { v4 as uuidv4, validate as uuidValidate } from 'uuid'; // Importamos validate también
+import { v4 as uuidv4, validate as uuidValidate } from 'uuid';
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -78,7 +78,7 @@ function App() {
     const [userId, setUserId] = useState(null);
 
 
-    // EFECTO 1: Generación de userId local al inicio - ¡AHORA USA localStorage!
+    // EFECTO 1: Generación de userId local al inicio
     useEffect(() => {
         let currentUserId = localStorage.getItem('app_user_id');
         if (!currentUserId) {
@@ -91,7 +91,8 @@ function App() {
 
 
     // EFECTO 2: Carga inicial de la aplicación y gestión del processId en URL
-    // ESTA VERSIÓN ES LA MÁS ESTABLE Y CUIDA LA CARGA DEL PDF DESDE URL O LA GENERACIÓN DE UNO NUEVO.
+    // Mantiene el PDF si no se encuentra un proceso guardado en Supabase,
+    // permitiendo cargar localmente y luego guardar.
     useEffect(() => {
         if (!userId) return; // Esperar a que el userId esté disponible.
 
@@ -101,7 +102,6 @@ function App() {
             const idFromUrl = params.get('proceso');
 
             if (idFromUrl) {
-                // Si hay un ID en la URL, intentar cargarlo.
                 setProcessId(idFromUrl); // Establecer el ID del estado
                 try {
                     const { data, error } = await supabase
@@ -120,15 +120,13 @@ function App() {
                         const parsedState = data.state_data;
 
                         const buffer = arrayBufferDecode(parsedState.pdfOriginalBuffer);
-                        setPdfOriginalBuffer(arrayBufferEncode(buffer)); // Actualiza el buffer para futuras firmas
+                        setPdfOriginalBuffer(arrayBufferEncode(buffer)); 
                         const newFileBlob = new Blob([buffer], { type: 'application/pdf' });
                         
-                        // Limpiar y luego establecer la URL del PDF y el selectedFile
                         if (fileUrl) URL.revokeObjectURL(fileUrl);
                         setFileUrl(URL.createObjectURL(newFileBlob)); 
                         setSelectedFile(newFileBlob); 
 
-                        // Restaurar el resto de estados guardados
                         setNumPages(parsedState.numPages);
                         setPageNumber(parsedState.pageNumber);
                         setScale(parsedState.scale);
@@ -144,72 +142,127 @@ function App() {
                         setErrorMessage('Proceso cargado desde URL exitosamente.');
                         setTimeout(() => setErrorMessage(''), 3000);
                     } else {
-                        // Si el ID estaba en la URL pero no se encontró un estado guardado en Supabase,
-                        // significa que el enlace puede ser viejo o inválido, o no pertenece a este usuario.
-                        console.warn('ID en URL pero no hay proceso guardado en Supabase para este ID o no es tuyo. Iniciando un nuevo proceso.');
-                        const newId = generateUniqueId(); // Generar un nuevo ID único
-                        setProcessId(newId); // Establecer el nuevo ID
-                        window.location.hash = `proceso=${newId}`; // Actualizar la URL con el nuevo ID
-                        setErrorMessage('Proceso no encontrado o no autorizado. Iniciando uno nuevo.');
+                        // ***** MODIFICACIÓN CLAVE AQUÍ PARA NO BORRAR PDF LOCAL *****
+                        // Si el ID de la URL no se encuentra en Supabase, NO LIMPIAR el PDF cargado localmente.
+                        // Solo actualiza el processId de la URL a uno nuevo para indicar que es un nuevo proceso.
+                        console.warn('ID en URL pero no hay proceso guardado en Supabase para este ID o no es tuyo. Generando nuevo processId para esta sesión.');
+                        const newId = generateUniqueId();
+                        setProcessId(newId);
+                        window.location.hash = `proceso=${newId}`; // Actualiza la URL
+                        setErrorMessage('Proceso anterior no encontrado o no autorizado. Puedes subir un nuevo PDF.');
                         setTimeout(() => setErrorMessage(''), 5000);
-                        // Limpiar estados del PDF para asegurar que el placeholder se ve.
-                        setSelectedFile(null);
-                        setPdfOriginalBuffer(null);
-                        if (fileUrl) URL.revokeObjectURL(fileUrl);
-                        setFileUrl(null);
-                        setNumPages(null);
-                        setPageNumber(1);
-                        setScale(1.0);
-                        pdfDocProxyRef.current = null;
+                        
+                        // Solo limpiar estados de firma y dejar el PDF visible si ya había uno cargado
+                        setShowSignatureBox1(false);
+                        setShowSignatureBox2(false);
+                        setShowSignatureBox3(false);
                         setHasSignatureApplied(false);
+                        setSignatureBox1Pos({ x: 0, y: 0 }); // Restablecer la posición del recuadro de firma 1
+                        setSignatureBox1Size({ width: 200, height: 100 });
+                        setFinalSignaturePos({ x: 0, y: 0 }); // Restablecer la posición de la firma final
+                        setFinalSignatureSize({ width: 0, height: 0 });
+
+                        // IMPORTANTE: NO TOCAR selectedFile, fileUrl, numPages, pageNumber, scale,
+                        // pdfDocProxyRef, pdfOriginalBuffer. Esto permite que el PDF ya cargado localmente
+                        // siga siendo visible si el usuario recargó la página sin guardar el proceso.
                     }
                 } catch (e) {
-                    // Capturar errores durante la carga (problemas de red, datos corruptos, etc.)
-                    console.error('Error al cargar proceso desde URL (posiblemente ID corrupto o problema de red/Supabase):', e);
+                    console.error('Error al cargar proceso desde URL:', e);
                     setErrorMessage('Error al cargar proceso. Se iniciará uno nuevo.');
                     setTimeout(() => setErrorMessage(''), 5000);
-                    const newId = generateUniqueId(); // Generar un nuevo ID para el nuevo proceso
+                    const newId = generateUniqueId();
                     setProcessId(newId);
-                    window.location.hash = `proceso=${newId}`; // Actualizar la URL
-                    // Limpiar estados del PDF para asegurar que el placeholder se ve.
-                    setSelectedFile(null);
-                    setPdfOriginalBuffer(null);
-                    if (fileUrl) URL.revokeObjectURL(fileUrl);
-                    setFileUrl(null);
-                    setNumPages(null);
-                    setPageNumber(1);
-                    setScale(1.0);
-                    pdfDocProxyRef.current = null;
+                    window.location.hash = `proceso=${newId}`;
+
+                    // Misma lógica: no limpiar el PDF si ya había uno cargado.
+                    setShowSignatureBox1(false);
+                    setShowSignatureBox2(false);
+                    setShowSignatureBox3(false);
                     setHasSignatureApplied(false);
+                    setSignatureBox1Pos({ x: 0, y: 0 }); 
+                    setSignatureBox1Size({ width: 200, height: 100 });
+                    setFinalSignaturePos({ x: 0, y: 0 });
+                    setFinalSignatureSize({ width: 0, height: 0 });
                 }
             } else {
                 // Si no hay ningún ID en la URL al inicio, generar uno nuevo y establecerlo.
+                console.log('No hay processId en la URL. Generando uno nuevo para esta sesión.');
                 const newId = generateUniqueId();
                 setProcessId(newId);
-                window.location.hash = `proceso=${newId}`; // Esto actualizará la URL en el navegador
-                // Limpiar estados del PDF para asegurar que el placeholder se ve.
-                setSelectedFile(null);
-                setPdfOriginalBuffer(null);
-                if (fileUrl) URL.revokeObjectURL(fileUrl);
-                setFileUrl(null);
-                setNumPages(null);
-                setPageNumber(1);
-                setScale(1.0);
-                pdfDocProxyRef.current = null;
-                setHasSignatureApplied(false);
+                window.location.hash = `proceso=${newId}`;
+                // Los estados iniciales de PDF ya son `null`, así que no se necesita limpieza aquí.
             }
         };
 
         loadInitialProcess();
 
-        // Limpieza de URL Blob al desmontar o al cambiar las dependencias.
         return () => {
             if (fileUrl) {
                 URL.revokeObjectURL(fileUrl);
             }
         };
-    }, [userId, fileUrl]); // Dependencias: userId para iniciar, fileUrl para limpieza de blobs.
+    }, [userId]); // Dependencias: userId para iniciar. Removimos fileUrl para evitar re-ejecuciones innecesarias.
 
+
+    // handleFileChange: Carga el PDF localmente y genera un nuevo processId en la URL
+    // NO guarda automáticamente en Supabase aquí.
+    const handleFileChange = async (event) => {
+        const file = event.target.files[0];
+        setErrorMessage('');
+        // Limpiar todos los estados relacionados con el PDF antes de cargar el nuevo.
+        setSelectedFile(null); 
+        if (fileUrl) URL.revokeObjectURL(fileUrl);
+        setFileUrl(null); 
+        setNumPages(null);
+        setPageNumber(1);
+        setScale(1.0);
+        pdfDocProxyRef.current = null;
+        setPdfOriginalBuffer(null);
+        setShowSignatureBox1(false);
+        setShowSignatureBox2(false);
+        setShowSignatureBox3(false);
+        setSignatureBox1Pos({ x: 0, y: 0 });
+        setSignatureBox1Size({ width: 200, height: 100 });
+        setIsDraggingBox(false);
+        setIsResizingBox(false);
+        setHasSignatureApplied(false);
+        setShowHelpModal(false);
+
+        // Al cargar un nuevo archivo, SIEMPRE generamos un nuevo processId y actualizamos la URL.
+        // Este ID será usado si se decide guardar el proceso más tarde.
+        const newId = generateUniqueId();
+        setProcessId(newId);
+        window.location.hash = `proceso=${newId}`;
+        
+        if (file) {
+            const MAX_FILE_SIZE_MB = 48;
+            const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+            if (file.type !== 'application/pdf') {
+                setErrorMessage('Error: Por favor, selecciona un archivo PDF válido.');
+                return;
+            }
+
+            if (file.size > MAX_FILE_SIZE_BYTES) {
+                setErrorMessage(`Error: El archivo es demasiado grande. Máximo ${MAX_FILE_SIZE_MB} MB.`);
+                return;
+            }
+
+            try {
+                const buffer = await file.arrayBuffer();
+                setPdfOriginalBuffer(arrayBufferEncode(buffer)); // Guarda el buffer para futuras firmas/guardado
+                const tempFileUrl = URL.createObjectURL(new Blob([buffer], { type: 'application/pdf' }));
+                setFileUrl(tempFileUrl); // Establece el fileUrl para que el visor lo muestre
+                setSelectedFile(file); // Establece selectedFile
+                console.log('Archivo PDF válido seleccionado:', file.name, 'Tamaño:', file.size, 'bytes');
+                setErrorMessage('PDF cargado exitosamente. Puedes añadir firmas o guardar el proceso.');
+                setTimeout(() => setErrorMessage(''), 4000);
+            } catch (error) {
+                console.error('Error al cargar el PDF:', error);
+                setErrorMessage('Error al cargar el PDF. Detalles en consola.');
+            }
+        }
+    };
 
     // Efecto para el posicionamiento inicial del recuadro de firma (Recuadro 1)
     useEffect(() => {
@@ -316,62 +369,6 @@ function App() {
         };
     }, [showSignatureBox3]);
 
-
-    const handleFileChange = async (event) => {
-        const file = event.target.files[0];
-        setErrorMessage('');
-        // Limpiar todos los estados relacionados con el PDF antes de cargar el nuevo.
-        // Esto es crucial para que el componente Document reaccione y no muestre el PDF anterior.
-        setSelectedFile(null); 
-        if (fileUrl) URL.revokeObjectURL(fileUrl);
-        setFileUrl(null); 
-        setNumPages(null);
-        setPageNumber(1);
-        setScale(1.0);
-        pdfDocProxyRef.current = null;
-        setPdfOriginalBuffer(null);
-        setShowSignatureBox1(false);
-        setShowSignatureBox2(false);
-        setShowSignatureBox3(false);
-        setSignatureBox1Pos({ x: 0, y: 0 });
-        setSignatureBox1Size({ width: 200, height: 100 });
-        setIsDraggingBox(false);
-        setIsResizingBox(false);
-        setHasSignatureApplied(false);
-        setShowHelpModal(false);
-
-        // Al cargar un nuevo archivo, SIEMPRE generamos un nuevo processId y actualizamos la URL.
-        const newId = generateUniqueId();
-        setProcessId(newId);
-        window.location.hash = `proceso=${newId}`;
-        
-        if (file) {
-            const MAX_FILE_SIZE_MB = 48;
-            const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-
-            if (file.type !== 'application/pdf') {
-                setErrorMessage('Error: Por favor, selecciona un archivo PDF válido.');
-                return;
-            }
-
-            if (file.size > MAX_FILE_SIZE_BYTES) {
-                setErrorMessage(`Error: El archivo es demasiado grande. Máximo ${MAX_FILE_SIZE_MB} MB.`);
-                return;
-            }
-
-            try {
-                const buffer = await file.arrayBuffer();
-                setPdfOriginalBuffer(arrayBufferEncode(buffer));
-                const tempFileUrl = URL.createObjectURL(new Blob([buffer], { type: 'application/pdf' }));
-                setFileUrl(tempFileUrl); // Establece el fileUrl
-                setSelectedFile(file); // Establece selectedFile
-                console.log('Archivo PDF válido seleccionado:', file.name, 'Tamaño:', file.size, 'bytes');
-            } catch (error) {
-                console.error('Error al cargar el PDF:', error);
-                setErrorMessage('Error al cargar el PDF. Detalles en consola.');
-            }
-        }
-    };
 
     const onDocumentLoadSuccess = ({ numPages: newNumPages, originalDocument }) => {
         setNumPages(newNumPages);
@@ -566,7 +563,7 @@ function App() {
         isDragging, isResizingBox, isDraggingBox, initialPinchDistance,
         startX, startY, scrollLeftInitial, scrollTopInitial, initialPinchScale,
         initialBoxRect, initialMousePos, resizeHandleType,
-        signatureBox1Pos, // Eliminada advertencia de `useCallback`
+        signatureBox1Pos, 
         signatureBox1Size, boxDragOffsetX, boxDragOffsetY
     ]);
 
@@ -822,22 +819,24 @@ function App() {
         }
     };
 
+    // handleSaveProcess: Este SÍ guarda el estado del proceso en Supabase.
     const handleSaveProcess = async () => {
         if (!selectedFile) {
             setErrorMessage('Carga un PDF antes de guardar el proceso.');
             setTimeout(() => setErrorMessage(''), 3000);
             return;
         }
-        // Asegúrate de que processId y userId están presentes.
-        // Si no hay processId, generamos uno nuevo. Esto puede pasar si el usuario no ha subido un PDF
-        // pero de alguna manera el botón de guardar proceso no está deshabilitado.
+        
         let idToSave = processId;
         if (!idToSave) {
+            // Esto es una precaución. Si processId es null aquí, es un error de estado.
+            // Debería estar ya generado por handleFileChange o el useEffect inicial.
             idToSave = generateUniqueId();
-            setProcessId(idToSave); // Actualiza el estado para reflejar el nuevo ID
+            setProcessId(idToSave); 
+            window.location.hash = `proceso=${idToSave}`; // Asegura que la URL tenga el ID
         }
 
-        if (!userId) { // userId siempre debería existir a estas alturas.
+        if (!userId) { 
             setErrorMessage('Error: ID de usuario no disponible. Intenta recargar la página.');
             setTimeout(() => setErrorMessage(''), 7000);
             return;
@@ -845,7 +844,7 @@ function App() {
 
         try {
             const processState = {
-                pdfOriginalBuffer: pdfOriginalBuffer,
+                pdfOriginalBuffer: pdfOriginalBuffer, // Usar el buffer actual del PDF
                 numPages,
                 pageNumber,
                 scale,
@@ -856,14 +855,14 @@ function App() {
                 showSignatureBox2,
                 finalSignaturePos,
                 finalSignatureSize,
-                showSignatureBox3: false
+                showSignatureBox3: false // Siempre guardar con modal de firma cerrado
             };
 
             const { data, error } = await supabase
                 .from('process_states')
                 .upsert(
                     {
-                        id: idToSave, // Usamos idToSave que ya tiene un valor garantizado
+                        id: idToSave, 
                         user_id: userId,
                         state_data: processState,
                     },
@@ -873,8 +872,8 @@ function App() {
             if (error) {
                 throw error;
             }
-
-            // Actualizar la URL del navegador con el processId guardado!
+            
+            // Asegúrate de que la URL se actualice correctamente si processId cambió aquí
             const currentUrlHash = window.location.hash;
             if (currentUrlHash !== `#proceso=${idToSave}`) {
                 window.location.hash = `proceso=${idToSave}`;
@@ -1124,7 +1123,7 @@ function App() {
                                 penColor='black'
                                 minWidth={1}
                                 maxWidth={2}
-                                backgroundColor='white'
+                                backgroundColor='rgba(0,0,0,0)' // <<< CAMBIO AQUÍ: Fondo transparente
                                 onBegin={() => setErrorMessage('')}
                             />
                         </div>
