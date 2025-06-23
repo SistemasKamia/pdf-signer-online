@@ -50,6 +50,11 @@ function App() {
     const [scrollLeftInitial, setScrollLeftInitial] = useState(0);
     const [scrollTopInitial, setScrollTopInitial] = useState(0);
 
+    // NUEVO ESTADO para el zoom con pellizcos
+    const [initialPinchDistance, setInitialPinchDistance] = useState(null);
+    const [initialPinchScale, setInitialPinchScale] = useState(1.0);
+
+
     // Estados para el Recuadro 1 (posicionamiento y redimensionamiento de la firma)
     const [showSignatureBox1, setShowSignatureBox1] = useState(false);
     const [signatureBox1Pos, setSignatureBox1Pos] = useState({ x: 0, y: 0 });
@@ -410,14 +415,24 @@ function App() {
         setPageNumber((prevPageNumber) => Math.max(prevPageNumber - 1, 1));
     };
 
-    // Arrastre del visor de PDF
-    const handleZoom = (event) => {
-        event.preventDefault();
+    // Arrastre del visor de PDF (mouse wheel zoom)
+    const handleMouseWheelZoom = (event) => {
+        // Solo permitir zoom con rueda si no hay procesos de arrastre o redimensionamiento activos
+        if (isDragging || isDraggingBox || isResizingBox) return;
+
+        event.preventDefault(); // Evitar el scroll de la página
+
         const delta = event.deltaY * -0.001; // Invertir el scroll para zoom y ajustar sensibilidad
         setScale((prevScale) => Math.max(0.5, Math.min(prevScale + delta, 3.0))); // Limitar zoom entre 0.5 y 3.0
     };
 
-    // --- MODIFICACIÓN IMPORTANTE: Unificar manejadores de ratón y táctiles ---
+    // Función para calcular la distancia entre dos puntos de toque
+    const getPinchDistance = (touches) => {
+        if (touches.length < 2) return null;
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    };
 
     const getEventClientCoords = (e) => {
         if (e.touches && e.touches.length > 0) {
@@ -427,34 +442,54 @@ function App() {
     };
 
     const onStartInteraction = (e) => { // Usado para onMouseDown y onTouchStart
-        // Prevenir el comportamiento por defecto del navegador para arrastre y zoom táctil
-        e.preventDefault();
-        e.stopPropagation(); // Evitar que el evento se propague si es un elemento interactivo anidado
-
-        // Solo permitir interacción si no hay ningún proceso activo (firma o ayuda) y no es el lienzo de firma del modal
+        // Si el evento de inicio es de un recuadro de firma o modal, dejar que lo manejen ellos.
         if (e.target.closest('.signature-box-1') || e.target.closest('.signature-box-1-resize-handle') || e.target.closest('.signature-box-2') || e.target.closest('.signature-box-3-modal') || showHelpModal) {
             return;
         }
 
+        // Prevenir el comportamiento por defecto del navegador (importante para móviles)
+        e.preventDefault();
+        e.stopPropagation(); // Evitar que el evento se propague si es un elemento interactivo anidado
+
         if (viewerRef.current) {
-            setIsDragging(true);
-            const { clientX, clientY } = getEventClientCoords(e);
-            setStartX(clientX - viewerRef.current.offsetLeft);
-            setStartY(clientY - viewerRef.current.offsetTop);
-            setScrollLeftInitial(viewerRef.current.scrollLeft);
-            setScrollTopInitial(viewerRef.current.scrollTop);
-            viewerRef.current.style.cursor = 'grabbing'; // Cambiar cursor a "grabbing"
+            if (e.touches && e.touches.length === 2) {
+                // Iniciar pellizco para zoom
+                setIsDragging(false); // Asegurar que no estamos arrastrando el PDF
+                const distance = getPinchDistance(e.touches);
+                setInitialPinchDistance(distance);
+                setInitialPinchScale(scale); // Guardar la escala actual al inicio del pellizco
+                console.log("Iniciando pellizco. Distancia inicial:", distance, "Escala inicial:", scale);
+            } else if (e.touches && e.touches.length === 1 || !e.touches) {
+                // Iniciar arrastre (mouse o un dedo)
+                setInitialPinchDistance(null); // Resetear pellizco
+                setIsDragging(true);
+                const { clientX, clientY } = getEventClientCoords(e);
+                setStartX(clientX - viewerRef.current.offsetLeft);
+                setStartY(clientY - viewerRef.current.offsetTop);
+                setScrollLeftInitial(viewerRef.current.scrollLeft);
+                setScrollTopInitial(viewerRef.current.scrollTop);
+                viewerRef.current.style.cursor = 'grabbing'; // Cambiar cursor a "grabbing"
+            }
         }
     };
 
     const onMoveInteraction = useCallback((e) => { // Usado para onMouseMove y onTouchMove
         // Si no estamos arrastrando el PDF, redimensionando o arrastrando el recuadro, salir
-        if (!isDragging && !isResizingBox && !isDraggingBox) return;
-        e.preventDefault(); // Prevenir el comportamiento por defecto del navegador (ej. selección de texto, scroll)
+        if (!isDragging && !isResizingBox && !isDraggingBox && !initialPinchDistance) return;
+        e.preventDefault(); // Prevenir el comportamiento por defecto del navegador (ej. selección de texto, scroll, zoom de página)
 
         const { clientX, clientY } = getEventClientCoords(e);
 
-        if (isDragging) { // Lógica para arrastrar el PDF
+        if (initialPinchDistance && e.touches && e.touches.length === 2) {
+            // Lógica para zoom con pellizcos
+            const currentDistance = getPinchDistance(e.touches);
+            if (currentDistance === null) return; // Esto no debería pasar con length === 2
+
+            const newScale = initialPinchScale * (currentDistance / initialPinchDistance);
+            setScale(Math.max(0.5, Math.min(newScale, 3.0))); // Limitar zoom entre 0.5 y 3.0
+            // console.log("Pellizco en movimiento. Nueva escala:", newScale.toFixed(2));
+        } else if (isDragging && (e.touches && e.touches.length === 1 || !e.touches)) {
+            // Lógica para arrastrar el PDF (solo si es un dedo o ratón, y si el pellizco no está activo)
             if (viewerRef.current) {
                 const x = clientX - viewerRef.current.offsetLeft;
                 const y = clientY - viewerRef.current.offsetTop;
@@ -569,8 +604,8 @@ function App() {
             setSignatureBox1Pos({ x: finalX, y: finalY });
         }
     }, [
-        isDragging, isResizingBox, isDraggingBox,
-        startX, startY, scrollLeftInitial, scrollTopInitial,
+        isDragging, isResizingBox, isDraggingBox, initialPinchDistance,
+        startX, startY, scrollLeftInitial, scrollTopInitial, initialPinchScale,
         initialBoxRect, initialMousePos, resizeHandleType, // Dependencias para redimensionamiento/arrastre
         signatureBox1Pos, signatureBox1Size, boxDragOffsetX, boxDragOffsetY
     ]);
@@ -582,6 +617,7 @@ function App() {
         setResizeHandleType(null);
         setInitialMousePos(null); // Limpiar estado inicial del ratón
         setInitialBoxRect(null); // Limpiar estado inicial del recuadro
+        setInitialPinchDistance(null); // Limpiar estado de pellizco
 
         if (viewerRef.current) {
             viewerRef.current.style.cursor = 'grab'; // Restaurar cursor del visor
@@ -590,10 +626,10 @@ function App() {
 
     // Handler global para cuando el puntero sale de la ventana (detiene arrastre/redimensionamiento)
     const onLeaveWindowGlobal = useCallback(() => { // Usado para onMouseLeave
-        if (isDragging || isDraggingBox || isResizingBox) {
+        if (isDragging || isDraggingBox || isResizingBox || initialPinchDistance) {
             onEndInteraction(); // Finalizar cualquier operación activa
         }
-    }, [isDragging, isDraggingBox, isResizingBox, onEndInteraction]);
+    }, [isDragging, isDraggingBox, isResizingBox, initialPinchDistance, onEndInteraction]);
 
 
     // Configuración de listeners de eventos globales al montar el componente
@@ -1064,7 +1100,7 @@ function App() {
                     <div className="pdf-viewer-container">
                         <div
                             className="pdf-document-wrapper"
-                            onWheel={handleZoom} // Habilitar zoom con rueda del ratón
+                            onWheel={handleMouseWheelZoom} // Habilitar zoom con rueda del ratón
                             ref={viewerRef} // Referencia para controlar scroll
                             onMouseDown={onStartInteraction} // Iniciar arrastre del PDF (ratón)
                             onTouchStart={onStartInteraction} // Iniciar arrastre del PDF (táctil)
@@ -1086,7 +1122,7 @@ function App() {
                             </Document>
 
                             {/* Indicador de Zoom */}
-                            <div className={`zoom-indicator ${isDragging ? 'visible' : ''}`}>
+                            <div className={`zoom-indicator ${isDragging || initialPinchDistance ? 'visible' : ''}`}>
                                 Zoom: {(scale * 100).toFixed(0)}%
                             </div>
 
