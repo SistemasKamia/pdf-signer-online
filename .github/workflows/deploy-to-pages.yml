@@ -24,7 +24,7 @@ jobs:
 
       - name: Build React App with Env Variables
         run: npm run build
-        env:
+        env: # <--- ¡Aquí se pasan las variables de entorno!
           REACT_APP_SUPABASE_URL: ${{ secrets.REACT_APP_SUPABASE_URL }}
           REACT_APP_SUPABASE_ANON_KEY: ${{ secrets.REACT_APP_SUPABASE_ANON_KEY }}
           CI: false # ¡Asegúrate que esta línea esté aquí para evitar que ESLint falle el build!
