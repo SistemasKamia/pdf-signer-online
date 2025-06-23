@@ -1,15 +1,15 @@
 {
   "files": {
     "main.css": "/pdf-signer-online/static/css/main.5aaa1a9b.css",
-    "main.js": "/pdf-signer-online/static/js/main.3c2c0225.js",
+    "main.js": "/pdf-signer-online/static/js/main.389db929.js",
     "static/js/584.311c28ca.chunk.js": "/pdf-signer-online/static/js/584.311c28ca.chunk.js",
     "index.html": "/pdf-signer-online/index.html",
     "main.5aaa1a9b.css.map": "/pdf-signer-online/static/css/main.5aaa1a9b.css.map",
-    "main.3c2c0225.js.map": "/pdf-signer-online/static/js/main.3c2c0225.js.map",
+    "main.389db929.js.map": "/pdf-signer-online/static/js/main.389db929.js.map",
     "584.311c28ca.chunk.js.map": "/pdf-signer-online/static/js/584.311c28ca.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.5aaa1a9b.css",
-    "static/js/main.3c2c0225.js"
+    "static/js/main.389db929.js"
   ]
 }
