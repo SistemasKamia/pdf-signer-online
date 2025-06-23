@@ -6,7 +6,7 @@ import SignatureCanvas from 'react-signature-canvas';
 import { PDFDocument } from 'pdf-lib';
 import { decode as arrayBufferDecode, encode as arrayBufferEncode } from 'base64-arraybuffer';
 
-import { v4 as uuidv4, validate as uuidValidate } from 'uuid'; // Importa validate también
+import { v4 as uuidv4, validate as uuidValidate } from 'uuid';
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -91,8 +91,6 @@ function App() {
 
 
     // EFECTO 2: Carga inicial de la aplicación y gestión del processId en URL
-    // Esta versión maneja la carga desde URL o genera un nuevo proceso al inicio.
-    // Es crucial que NO limpie el PDF si el usuario subió uno, solo si intenta cargar de DB y falla.
     useEffect(() => {
         if (!userId) return; // Esperar a que el userId esté disponible.
 
@@ -105,6 +103,12 @@ function App() {
                 // Si hay un ID en la URL, intentar cargarlo.
                 setProcessId(idFromUrl); // Establecer el ID del estado
                 try {
+                    // *** DEPURACIÓN CRÍTICA AQUÍ ***
+                    console.log("DEPURACIÓN: Realizando consulta a Supabase para cargar:");
+                    console.log("DEPURACIÓN: idFromUrl:", idFromUrl, " (tipo:", typeof idFromUrl, ")");
+                    console.log("DEPURACIÓN: userId:", userId, " (tipo:", typeof userId, ")");
+                    // ********************************
+
                     const { data, error } = await supabase
                         .from('process_states')
                         .select('state_data')
@@ -112,8 +116,11 @@ function App() {
                         .eq('user_id', userId)
                         .single();
 
-                    if (error && error.code !== 'PGRST116') { // 'PGRST116' es el código para "no row found"
-                        throw error;
+                    if (error) { // Captura y loguea cualquier error de Supabase
+                        console.error("DEPURACIÓN: Error de Supabase al cargar proceso:", error);
+                        if (error.code !== 'PGRST116') { // 'PGRST116' es el código para "no row found"
+                            throw error;
+                        }
                     }
 
                     if (data && data.state_data) {
@@ -137,7 +144,7 @@ function App() {
                         setShowSignatureBox1(parsedState.showSignatureBox1);
                         setSignatureBox1Pos(parsedState.signatureBox1Pos);
                         setSignatureBox1Size(parsedState.signatureBox1Size);
-                        setShowSignatureBox2(parsedState.newFileBlob); // <-- Corregido para que no use newFileBlob aquí
+                        setShowSignatureBox2(parsedState.showSignatureBox2); 
                         setFinalSignaturePos(parsedState.finalSignaturePos);
                         setFinalSignatureSize(parsedState.finalSignatureSize);
                         setShowSignatureBox3(parsedState.showSignatureBox3);
@@ -153,7 +160,7 @@ function App() {
                         window.location.hash = `proceso=${newId}`; // Actualizar la URL con el nuevo ID
                         setErrorMessage('Proceso no encontrado o no autorizado. Iniciando uno nuevo.');
                         setTimeout(() => setErrorMessage(''), 5000);
-                        // Limpiar los estados del PDF para asegurar que el placeholder se ve.
+                        // Limpiar estados del PDF para asegurar que el placeholder se ve.
                         setSelectedFile(null);
                         setPdfOriginalBuffer(null);
                         if (fileUrl) URL.revokeObjectURL(fileUrl);
@@ -596,7 +603,7 @@ function App() {
         window.addEventListener('mousemove', onMoveInteraction);
         window.addEventListener('mouseleave', onLeaveWindowGlobal);
 
-        window.addEventListener('touchend', onEndInteraction);
+        window.addEventListener('touchend', onEndInteraction); // <-- ¡CORREGIDO! Antes era onEndEventListener
         window.addEventListener('touchmove', onMoveInteraction, { passive: false });
         window.addEventListener('touchcancel', onEndInteraction);
 
@@ -605,7 +612,7 @@ function App() {
             window.removeEventListener('mousemove', onMoveInteraction);
             window.removeEventListener('mouseleave', onLeaveWindowGlobal);
 
-            window.removeEventListener('touchend', onEndInteraction);
+            window.removeEventListener('touchend', onEndInteraction); // <-- ¡CORREGIDO! Antes era onEndEventListener
             window.removeEventListener('touchmove', onMoveInteraction);
             window.removeEventListener('touchcancel', onEndInteraction);
         };
@@ -698,12 +705,10 @@ function App() {
 
     const handleConfirmSignature3 = async () => {
         if (sigCanvasRef.current && !sigCanvasRef.current.isEmpty()) {
-            // *** DEPURA SI ES REALMENTE PNG O NO ***
             // La calidad 1.0 es el valor máximo para toDataURL para PNG (no aplica compresión).
             const signatureDataURL = sigCanvasRef.current.getTrimmedCanvas().toDataURL('image/png', 1.0); 
             console.log("DEPURACIÓN FIRMA: Signature Data URL MIME Type:", signatureDataURL.split(';')[0]); // Debería ser "data:image/png"
             console.log("DEPURACIÓN FIRMA: Signature Data URL start (first 50 chars):", signatureDataURL.substring(0, 50));
-            // ************************************
 
             setShowSignatureBox3(false);
             sigCanvasRef.current.clear();
@@ -723,8 +728,7 @@ function App() {
                 return;
             }
 
-            // Declara pdfDoc aquí para que esté disponible en todo el bloque try/catch
-            let pdfDoc; 
+            let pdfDoc; // Declarar pdfDoc aquí para que esté disponible en todo el bloque try/catch
 
             try {
                 pdfDoc = await PDFDocument.load(pdfArrayBuffer); // Asignar aquí
@@ -989,7 +993,7 @@ function App() {
                         className="action-button save-process-button"
                         onClick={handleSaveProcess}
                         disabled={!selectedFile || showHelpModal || !processId || !userId}
-                        title="Guarda el estado actual de tu trabajo (incluyendo el PDF y el recuadro de firma si está activo) en línea, asociándolo a esta URL única para que puedas continuar más tarde o compartirla."
+                        title="Guarda el estado actual de tu trabajo (incluyendo el PDF y el recuadro de firma si está activo) en línea, asociándolo a esta URL única para lo que puedas continuar más tarde o compartirla."
                     >
                         Guardar Proceso 💾
                     </button>
@@ -1127,7 +1131,7 @@ function App() {
                                     width: sigCanvasWidth,
                                     height: sigCanvasHeight,
                                     // Propiedad para fondo transparente
-                                    backgroundColor: 'transparent' // <-- ¡CAMBIO CLAVE PARA TRANSPARENCIA!
+                                    backgroundColor: 'transparent'
                                 }}
                                 penColor='black'
                                 minWidth={1}
