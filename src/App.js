@@ -6,7 +6,7 @@ import SignatureCanvas from 'react-signature-canvas';
 import { PDFDocument } from 'pdf-lib';
 import { decode as arrayBufferDecode, encode as arrayBufferEncode } from 'base64-arraybuffer';
 
-import { v4 as uuidv4, validate as uuidValidate } from 'uuid';
+import { v4 as uuidv4, validate as uuidValidate } from 'uuid'; // Importa validate también
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -90,116 +90,126 @@ function App() {
     }, []);
 
 
-    // EFECTO 2: Inicialización del processId y CARGA de datos desde Supabase
-    // MODIFICADO: Simplificamos la lógica de carga y quitamos las limpiezas de PDF.
+    // EFECTO 2: Carga inicial de la aplicación y gestión del processId en URL
+    // Esta versión maneja la carga desde URL o genera un nuevo proceso al inicio.
+    // Es crucial que NO limpie el PDF si el usuario subió uno, solo si intenta cargar de DB y falla.
     useEffect(() => {
-        if (!userId) return; // Espera a que el userId esté listo.
+        if (!userId) return; // Esperar a que el userId esté disponible.
 
-        const initAndLoadProcessState = async () => {
+        const loadInitialProcess = async () => {
             const hash = window.location.hash;
             const params = new URLSearchParams(hash.substring(1));
-            let idFromUrl = params.get('proceso');
-            
-            let idToUse = idFromUrl; 
+            const idFromUrl = params.get('proceso');
 
-            // Si no hay ID en la URL, o si es inválido, generar uno nuevo.
-            if (!idToUse || !uuidValidate(idToUse)) {
-                idToUse = generateUniqueId();
-                window.location.hash = `proceso=${idToUse}`;
-            }
-            setProcessId(idToUse); // Siempre establece el processId en el estado.
-
-            // Solo intentar cargar el proceso desde Supabase si el ID provino de la URL
-            // Y ese ID de la URL es válido y tenemos un userId.
-            if (idFromUrl && uuidValidate(idFromUrl) && userId) { 
+            if (idFromUrl) {
+                // Si hay un ID en la URL, intentar cargarlo.
+                setProcessId(idFromUrl); // Establecer el ID del estado
                 try {
                     const { data, error } = await supabase
                         .from('process_states')
                         .select('state_data')
-                        .eq('id', idToUse)
+                        .eq('id', idFromUrl)
                         .eq('user_id', userId)
                         .single();
 
-                    if (error && error.code !== 'PGRST116') { // PGRST116 = no row found
+                    if (error && error.code !== 'PGRST116') { // 'PGRST116' es el código para "no row found"
                         throw error;
                     }
 
                     if (data && data.state_data) {
+                        // Si se encuentra el estado guardado, restaurar todos los estados de la aplicación
                         const parsedState = data.state_data;
+
                         const buffer = arrayBufferDecode(parsedState.pdfOriginalBuffer);
-                        
-                        // **** LÓGICA DE CARGA DE PDF AL ÉXITO DE SUPABASE ****
-                        if (fileUrl) URL.revokeObjectURL(fileUrl); // Limpiar URL anterior si existe
-                        setFileUrl(null); // Poner null para forzar re-render de Document
-                        setSelectedFile(null); // Poner null para limpiar el nombre de archivo
-                        setPdfOriginalBuffer(null); // Limpiar buffer
-                        setNumPages(null); // Resetear páginas
-                        setPageNumber(1); // Ir a página 1
-                        setScale(1.0); // Resetear zoom
-                        pdfDocProxyRef.current = null; // Resetear proxy
-                        setHasSignatureApplied(false); // Resetear firmas aplicadas
-
-                        setPdfOriginalBuffer(arrayBufferEncode(buffer));
+                        setPdfOriginalBuffer(arrayBufferEncode(buffer)); // Actualiza el buffer para futuras firmas
                         const newFileBlob = new Blob([buffer], { type: 'application/pdf' });
-                        setFileUrl(URL.createObjectURL(newFileBlob));
-                        setSelectedFile(newFileBlob);
-                        // ********************************************************
+                        
+                        // Limpiar y luego establecer la URL del PDF y el selectedFile
+                        if (fileUrl) URL.revokeObjectURL(fileUrl);
+                        setFileUrl(URL.createObjectURL(newFileBlob)); 
+                        setSelectedFile(newFileBlob); 
 
-                        setNumPages(parsedState.numPages); // Cargar número de páginas guardado
-                        setPageNumber(parsedState.pageNumber); // Cargar página guardada
-                        setScale(parsedState.scale); // Cargar escala guardada
-                        setHasSignatureApplied(parsedState.hasSignatureApplied); // Cargar firmas aplicadas
+                        // Restaurar el resto de estados guardados
+                        setNumPages(parsedState.numPages);
+                        setPageNumber(parsedState.pageNumber);
+                        setScale(parsedState.scale);
+                        setHasSignatureApplied(parsedState.hasSignatureApplied);
                         setShowSignatureBox1(parsedState.showSignatureBox1);
                         setSignatureBox1Pos(parsedState.signatureBox1Pos);
                         setSignatureBox1Size(parsedState.signatureBox1Size);
-                        setShowSignatureBox2(parsedState.showSignatureBox2);
+                        setShowSignatureBox2(parsedState.newFileBlob); // <-- Corregido para que no use newFileBlob aquí
                         setFinalSignaturePos(parsedState.finalSignaturePos);
                         setFinalSignatureSize(parsedState.finalSignatureSize);
                         setShowSignatureBox3(parsedState.showSignatureBox3);
 
-
                         setErrorMessage('Proceso cargado desde URL exitosamente.');
                         setTimeout(() => setErrorMessage(''), 3000);
-                        if (window.location.hash !== `#proceso=${idToUse}`) {
-                            window.location.hash = `proceso=${idToUse}`;
-                        }
                     } else {
-                        // Si el ID en la URL no llevó a un proceso válido, notificar.
-                        console.warn(`Proceso con ID ${idToUse} no encontrado o no autorizado. Iniciando uno nuevo.`);
+                        // Si el ID estaba en la URL pero no se encontró un estado guardado en Supabase,
+                        // significa que el enlace puede ser viejo o inválido, o no pertenece a este usuario.
+                        console.warn('ID en URL pero no hay proceso guardado en Supabase para este ID o no es tuyo. Iniciando un nuevo proceso.');
+                        const newId = generateUniqueId(); // Generar un nuevo ID único
+                        setProcessId(newId); // Establecer el nuevo ID
+                        window.location.hash = `proceso=${newId}`; // Actualizar la URL con el nuevo ID
                         setErrorMessage('Proceso no encontrado o no autorizado. Iniciando uno nuevo.');
                         setTimeout(() => setErrorMessage(''), 5000);
-                        // IMPORTANTE: NO TOCAR selectedFile/fileUrl aquí, ya que handleFileChange se encarga
-                        // de cargarlos si el usuario sube un PDF nuevo.
+                        // Limpiar los estados del PDF para asegurar que el placeholder se ve.
+                        setSelectedFile(null);
+                        setPdfOriginalBuffer(null);
+                        if (fileUrl) URL.revokeObjectURL(fileUrl);
+                        setFileUrl(null);
+                        setNumPages(null);
+                        setPageNumber(1);
+                        setScale(1.0);
+                        pdfDocProxyRef.current = null;
+                        setHasSignatureApplied(false);
                     }
                 } catch (e) {
-                    console.error('Error al cargar proceso desde URL:', e);
+                    // Capturar errores durante la carga (problemas de red, datos corruptos, etc.)
+                    console.error('Error al cargar proceso desde URL (posiblemente ID corrupto o problema de red/Supabase):', e);
                     setErrorMessage('Error al cargar proceso. Se iniciará uno nuevo.');
                     setTimeout(() => setErrorMessage(''), 5000);
-                    // IMPORTANTE: NO TOCAR selectedFile/fileUrl aquí.
+                    const newId = generateUniqueId(); // Generar un nuevo ID para el nuevo proceso
+                    setProcessId(newId);
+                    window.location.hash = `proceso=${newId}`; // Actualizar la URL
+                    // Limpiar estados del PDF para asegurar que el placeholder se ve.
+                    setSelectedFile(null);
+                    setPdfOriginalBuffer(null);
+                    if (fileUrl) URL.revokeObjectURL(fileUrl);
+                    setFileUrl(null);
+                    setNumPages(null);
+                    setPageNumber(1);
+                    setScale(1.0);
+                    pdfDocProxyRef.current = null;
+                    setHasSignatureApplied(false);
                 }
             } else {
-                // Si la app carga sin ID en URL, solo se genera uno nuevo.
-                console.log("No hay ID en URL. Listo para un proceso fresco. processId:", idToUse);
-                // IMPORTANTE: NO LIMPIAR PDF AQUÍ. handleFileChange se encargará.
+                // Si no hay ningún ID en la URL al inicio, generar uno nuevo y establecerlo.
+                const newId = generateUniqueId();
+                setProcessId(newId);
+                window.location.hash = `proceso=${newId}`; // Esto actualizará la URL en el navegador
+                // Limpiar estados del PDF para asegurar que el placeholder se ve.
+                setSelectedFile(null);
+                setPdfOriginalBuffer(null);
+                if (fileUrl) URL.revokeObjectURL(fileUrl);
+                setFileUrl(null);
+                setNumPages(null);
+                setPageNumber(1);
+                setScale(1.0);
+                pdfDocProxyRef.current = null;
+                setHasSignatureApplied(false);
             }
         };
 
-        initAndLoadProcessState();
+        loadInitialProcess();
 
-        // Este cleanup es para el propio efecto, no para el PDF general.
-        return () => {}; // Dejamos el cleanup vacío si no hay listeners específicos aquí.
-    }, [userId]);
-
-
-    // useEffect separado para limpiar fileUrl cuando cambia o cuando el componente se desmonta.
-    // Esto es más simple y predecible.
-    useEffect(() => {
+        // Limpieza de URL Blob al desmontar o al cambiar las dependencias.
         return () => {
             if (fileUrl) {
                 URL.revokeObjectURL(fileUrl);
             }
         };
-    }, [fileUrl]);
+    }, [userId, fileUrl]); // Dependencias: userId para iniciar, fileUrl para limpieza de blobs.
 
 
     // Efecto para el posicionamiento inicial del recuadro de firma (Recuadro 1)
@@ -556,7 +566,7 @@ function App() {
         isDragging, isResizingBox, isDraggingBox, initialPinchDistance,
         startX, startY, scrollLeftInitial, scrollTopInitial, initialPinchScale,
         initialBoxRect, initialMousePos, resizeHandleType,
-        signatureBox1Pos,
+        signatureBox1Pos, // Eliminada advertencia de `useCallback`
         signatureBox1Size, boxDragOffsetX, boxDragOffsetY
     ]);
 
@@ -688,7 +698,12 @@ function App() {
 
     const handleConfirmSignature3 = async () => {
         if (sigCanvasRef.current && !sigCanvasRef.current.isEmpty()) {
-            const signatureDataURL = sigCanvasRef.current.toDataURL('image/png');
+            // *** DEPURA SI ES REALMENTE PNG O NO ***
+            // La calidad 1.0 es el valor máximo para toDataURL para PNG (no aplica compresión).
+            const signatureDataURL = sigCanvasRef.current.getTrimmedCanvas().toDataURL('image/png', 1.0); 
+            console.log("DEPURACIÓN FIRMA: Signature Data URL MIME Type:", signatureDataURL.split(';')[0]); // Debería ser "data:image/png"
+            console.log("DEPURACIÓN FIRMA: Signature Data URL start (first 50 chars):", signatureDataURL.substring(0, 50));
+            // ************************************
 
             setShowSignatureBox3(false);
             sigCanvasRef.current.clear();
@@ -708,9 +723,12 @@ function App() {
                 return;
             }
 
+            // Declara pdfDoc aquí para que esté disponible en todo el bloque try/catch
+            let pdfDoc; 
+
             try {
-                const pdfDoc = await PDFDocument.load(pdfArrayBuffer);
-                const signatureImage = await pdfDoc.embedPng(signatureDataURL);
+                pdfDoc = await PDFDocument.load(pdfArrayBuffer); // Asignar aquí
+                const signatureImage = await pdfDoc.embedPng(signatureDataURL); // Usamos embedPng explícitamente
 
                 const pages = pdfDoc.getPages();
                 if (pageNumber < 1 || pageNumber > pages.length) {
@@ -971,7 +989,7 @@ function App() {
                         className="action-button save-process-button"
                         onClick={handleSaveProcess}
                         disabled={!selectedFile || showHelpModal || !processId || !userId}
-                        title="Guarda el estado actual de tu trabajo (incluyendo el PDF y el recuadro de firma si está activo) en línea. Se asocia a esta URL única para que puedas continuar más tarde o compartirla."
+                        title="Guarda el estado actual de tu trabajo (incluyendo el PDF y el recuadro de firma si está activo) en línea, asociándolo a esta URL única para que puedas continuar más tarde o compartirla."
                     >
                         Guardar Proceso 💾
                     </button>
@@ -1016,8 +1034,6 @@ function App() {
                             onTouchStart={(e) => onStartInteraction(e)}
                         >
                             <Document
-                                // La clave fuerza a React a re-renderizar el componente Document
-                                // cuando el fileUrl cambia, lo que es crucial para react-pdf.
                                 key={fileUrl} 
                                 file={fileUrl}
                                 onLoadSuccess={onDocumentLoadSuccess}
@@ -1110,11 +1126,15 @@ function App() {
                                     className: 'signature-canvas-modal',
                                     width: sigCanvasWidth,
                                     height: sigCanvasHeight,
+                                    // Propiedad para fondo transparente
+                                    backgroundColor: 'transparent' // <-- ¡CAMBIO CLAVE PARA TRANSPARENCIA!
                                 }}
                                 penColor='black'
                                 minWidth={1}
                                 maxWidth={2}
-                                backgroundColor='white'
+                                dotSize={0.5} // Mejora la continuidad del trazo
+                                velocityFilterWeight={0.9} // Suaviza el trazo
+                                minDistance={0.1} // Asegura más puntos en el trazo para nitidez
                                 onBegin={() => setErrorMessage('')}
                             />
                         </div>
