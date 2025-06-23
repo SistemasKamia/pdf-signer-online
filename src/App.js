@@ -6,197 +6,193 @@ import SignatureCanvas from 'react-signature-canvas';
 import { PDFDocument } from 'pdf-lib';
 import { decode as arrayBufferDecode, encode as arrayBufferEncode } from 'base64-arraybuffer';
 
-// Importar Supabase Client
+import { v4 as uuidv4, validate as uuidValidate } from 'uuid';
+
 import { createClient } from '@supabase/supabase-js';
 
-// *********************************************************************************
-// ¡SOLUCIÓN FINAL Y MÁS ROBUSTA PARA EL WORKER CON LA VERSIÓN ESPECÍFICA DETECTADA EN CONSOLA!
-// Apuntamos a la versión 3.11.174 de pdf.worker.min.js en CDNJS.
-// *********************************************************************************
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
 
-// Inicializar Supabase Client
-// Asegúrate de que estas variables de entorno estén definidas en tu archivo .env
+console.log("DEPURACIÓN: Valor de REACT_APP_SUPABASE_URL:", process.env.REACT_APP_SUPABASE_URL);
+console.log("DEPURACIÓN: Valor de REACT_APP_SUPABASE_ANON_KEY:", process.env.REACT_APP_SUPABASE_ANON_KEY);
+
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
-// Verificar que las claves de Supabase existan para evitar errores de inicialización
 if (!supabaseUrl || !supabaseAnonKey) {
     console.error("Faltan las variables de entorno de Supabase. Asegúrate de configurar REACT_APP_SUPABASE_URL y REACT_APP_SUPABASE_ANON_KEY en tu archivo .env");
-    // Si las claves no están, las llamadas a Supabase fallarán. Se puede añadir un mensaje de error más visible.
 }
+
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Función para generar un ID único para el proceso (usado para la URL y Supabase)
-const generateUniqueId = () => Math.random().toString(36).substr(2, 9); // Renombrada para uso general
+const generateUniqueId = () => uuidv4();
+
 
 function App() {
-    // --- Estados de la aplicación ---
     const [selectedFile, setSelectedFile] = useState(null);
-    const [pdfOriginalBuffer, setPdfOriginalBuffer] = useState(null); // PDF en Base64 para manipulación
+    const [pdfOriginalBuffer, setPdfOriginalBuffer] = useState(null);
 
-    const [fileUrl, setFileUrl] = useState(null); // URL Blob para react-pdf
+    const [fileUrl, setFileUrl] = useState(null);
     const [errorMessage, setErrorMessage] = useState('');
     const [numPages, setNumPages] = useState(null);
     const [pageNumber, setPageNumber] = useState(1);
     const [scale, setScale] = useState(1.0);
 
-    const viewerRef = useRef(null); // Referencia al contenedor del visor de PDF
+    const viewerRef = useRef(null);
 
-    // Estados para el arrastre del PDF en el visor
     const [isDragging, setIsDragging] = useState(false);
     const [startX, setStartX] = useState(0);
     const [startY, setStartY] = useState(0);
     const [scrollLeftInitial, setScrollLeftInitial] = useState(0);
     const [scrollTopInitial, setScrollTopInitial] = useState(0);
 
-    // NUEVO ESTADO para el zoom con pellizcos
     const [initialPinchDistance, setInitialPinchDistance] = useState(null);
     const [initialPinchScale, setInitialPinchScale] = useState(1.0);
 
-
-    // Estados para el Recuadro 1 (posicionamiento y redimensionamiento de la firma)
     const [showSignatureBox1, setShowSignatureBox1] = useState(false);
     const [signatureBox1Pos, setSignatureBox1Pos] = useState({ x: 0, y: 0 });
     const [signatureBox1Size, setSignatureBox1Size] = useState({ width: 200, height: 100 });
 
-    // Estados para arrastre y redimensionamiento del recuadro de firma
     const [isDraggingBox, setIsDraggingBox] = useState(false);
     const [boxDragOffsetX, setBoxDragOffsetX] = useState(0);
     const [boxDragOffsetY, setBoxDragOffsetY] = useState(0);
 
     const [isResizingBox, setIsResizingBox] = useState(false);
-    const [resizeHandleType, setResizeHandleType] = useState(null); // 'br' (bottom-right), 'bl' (bottom-left)
-    const [initialBoxRect, setInitialBoxRect] = useState(null); // Posición y tamaño inicial del recuadro al empezar a arrastrar/redimensionar
-    const [initialMousePos, setInitialMousePos] = useState(null); // Posición inicial del ratón al empezar a arrastrar/redimensionar
+    const [resizeHandleType, setResizeHandleType] = useState(null);
+    const [initialBoxRect, setInitialBoxRect] = useState(null);
+    const [initialMousePos, setInitialMousePos] = useState(null);
 
-    // Estados para el Recuadro 2 (confirmación del área de la firma)
     const [showSignatureBox2, setShowSignatureBox2] = useState(false);
-    const [finalSignaturePos, setFinalSignaturePos] = useState({ x: 0, y: 0 }); // Posición final confirmada
-    const [finalSignatureSize, setFinalSignatureSize] = useState({ width: 0, height: 0 }); // Tamaño final confirmado
+    const [finalSignaturePos, setFinalSignaturePos] = useState({ x: 0, y: 0 });
+    const [finalSignatureSize, setFinalSignatureSize] = useState({ width: 0, height: 0 });
 
-    // Estados para el Recuadro 3 (modal de dibujo de la firma)
     const [showSignatureBox3, setShowSignatureBox3] = useState(false);
-    const sigCanvasRef = useRef(null); // Referencia al componente SignatureCanvas
-    const modalCanvasDrawingAreaRef = useRef(null); // Referencia al div que contiene el canvas del modal
+    const sigCanvasRef = useRef(null);
+    const modalCanvasDrawingAreaRef = useRef(null);
     const [sigCanvasWidth, setSigCanvasWidth] = useState(0);
     const [sigCanvasHeight, setSigCanvasHeight] = useState(0);
-    const pdfDocProxyRef = useRef(null); // Referencia al objeto de documento PDF cargado por react-pdf
+    const pdfDocProxyRef = useRef(null);
 
-    // Nuevos estados para funcionalidades avanzadas
-    const [hasSignatureApplied, setHasSignatureApplied] = useState(false); // Indica si ya se incrustó al menos una firma
-    const [showHelpModal, setShowHelpModal] = useState(false); // Controla la visibilidad del modal de ayuda
-    const [processId, setProcessId] = useState(null); // ID único para el proceso actual (para URL y Supabase)
-    const [userId, setUserId] = useState(null); // ID del usuario (generado localmente)
+    const [hasSignatureApplied, setHasSignatureApplied] = useState(false);
+    const [showHelpModal, setShowHelpModal] = useState(false);
+    const [processId, setProcessId] = useState(null);
+    const [userId, setUserId] = useState(null);
 
 
-    // EFECTO 1: Generación de userId local al inicio (REEMPLAZA AUTENTICACIÓN DE FIREBASE)
+    // EFECTO 1: Generación de userId local al inicio - ¡AHORA USA localStorage!
     useEffect(() => {
-        // Intentar cargar userId de sessionStorage o generar uno nuevo
-        let currentUserId = sessionStorage.getItem('app_user_id');
+        let currentUserId = localStorage.getItem('app_user_id');
         if (!currentUserId) {
             currentUserId = generateUniqueId();
-            sessionStorage.setItem('app_user_id', currentUserId); // Guarda en sessionStorage para persistir entre recargas
+            localStorage.setItem('app_user_id', currentUserId);
         }
         setUserId(currentUserId);
         console.log("UserID de sesión:", currentUserId);
-    }, []); // Se ejecuta solo una vez al montar la aplicación
+    }, []);
 
 
-    // EFECTO 2: Carga inicial de la aplicación y gestión del processId en URL
+    // EFECTO 2: Inicialización del processId y CARGA de datos desde Supabase
+    // MODIFICADO: Simplificamos la lógica de carga y quitamos las limpiezas de PDF.
     useEffect(() => {
-        if (!userId) return; // Asegurarse de que userId ya se haya establecido
+        if (!userId) return; // Espera a que el userId esté listo.
 
-        const loadInitialProcess = async () => {
-            const hash = window.location.hash; // Obtener la parte del hash de la URL (ej. "#proceso=XYZ")
-            const params = new URLSearchParams(hash.substring(1)); // Crear un objeto URLSearchParams, eliminando el '#'
-            const idFromUrl = params.get('proceso'); // Obtener el valor del parámetro 'proceso'
+        const initAndLoadProcessState = async () => {
+            const hash = window.location.hash;
+            const params = new URLSearchParams(hash.substring(1));
+            let idFromUrl = params.get('proceso');
+            
+            let idToUse = idFromUrl; 
 
-            if (idFromUrl) {
-                setProcessId(idFromUrl); // Establecer el ID de proceso obtenido de la URL
+            // Si no hay ID en la URL, o si es inválido, generar uno nuevo.
+            if (!idToUse || !uuidValidate(idToUse)) {
+                idToUse = generateUniqueId();
+                window.location.hash = `proceso=${idToUse}`;
+            }
+            setProcessId(idToUse); // Siempre establece el processId en el estado.
+
+            // Solo intentar cargar el proceso desde Supabase si el ID provino de la URL
+            // Y ese ID de la URL es válido y tenemos un userId.
+            if (idFromUrl && uuidValidate(idFromUrl) && userId) { 
                 try {
-                    // Intentar cargar el estado guardado desde Supabase usando el ID de la URL
                     const { data, error } = await supabase
                         .from('process_states')
-                        .select('state_data') // Solo necesitamos la columna 'state_data'
-                        .eq('id', idFromUrl) // Buscar por el ID de proceso
-                        .eq('user_id', userId) // CRUCIAL: Solo cargar si el user_id coincide (por RLS)
-                        .single(); // Esperar un solo resultado
+                        .select('state_data')
+                        .eq('id', idToUse)
+                        .eq('user_id', userId)
+                        .single();
 
-                    if (error && error.code !== 'PGRST116') { // 'PGRST116' es el código para "no row found"
-                        throw error; // Lanzar otros errores que no sean "no encontrado"
+                    if (error && error.code !== 'PGRST116') { // PGRST116 = no row found
+                        throw error;
                     }
 
                     if (data && data.state_data) {
-                        // Si se encuentra el estado guardado, restaurar todos los estados de la aplicación
                         const parsedState = data.state_data;
-
-                        // Decodificar el buffer del PDF (que está en Base64) y crear una URL Blob para el visor
                         const buffer = arrayBufferDecode(parsedState.pdfOriginalBuffer);
-                        setPdfOriginalBuffer(parsedState.pdfOriginalBuffer);
+                        
+                        // **** LÓGICA DE CARGA DE PDF AL ÉXITO DE SUPABASE ****
+                        if (fileUrl) URL.revokeObjectURL(fileUrl); // Limpiar URL anterior si existe
+                        setFileUrl(null); // Poner null para forzar re-render de Document
+                        setSelectedFile(null); // Poner null para limpiar el nombre de archivo
+                        setPdfOriginalBuffer(null); // Limpiar buffer
+                        setNumPages(null); // Resetear páginas
+                        setPageNumber(1); // Ir a página 1
+                        setScale(1.0); // Resetear zoom
+                        pdfDocProxyRef.current = null; // Resetear proxy
+                        setHasSignatureApplied(false); // Resetear firmas aplicadas
+
+                        setPdfOriginalBuffer(arrayBufferEncode(buffer));
                         const newFileBlob = new Blob([buffer], { type: 'application/pdf' });
-                        setSelectedFile(newFileBlob);
-
-                        // Si ya existe una URL de archivo anterior, revocarla para liberar memoria
-                        if (fileUrl) URL.revokeObjectURL(fileUrl);
                         setFileUrl(URL.createObjectURL(newFileBlob));
+                        setSelectedFile(newFileBlob);
+                        // ********************************************************
 
-                        // Restaurar el resto de estados guardados
-                        setNumPages(parsedState.numPages);
-                        setPageNumber(parsedState.pageNumber);
-                        setScale(parsedState.scale);
-                        setHasSignatureApplied(parsedState.hasSignatureApplied);
+                        setNumPages(parsedState.numPages); // Cargar número de páginas guardado
+                        setPageNumber(parsedState.pageNumber); // Cargar página guardada
+                        setScale(parsedState.scale); // Cargar escala guardada
+                        setHasSignatureApplied(parsedState.hasSignatureApplied); // Cargar firmas aplicadas
                         setShowSignatureBox1(parsedState.showSignatureBox1);
                         setSignatureBox1Pos(parsedState.signatureBox1Pos);
                         setSignatureBox1Size(parsedState.signatureBox1Size);
                         setShowSignatureBox2(parsedState.showSignatureBox2);
                         setFinalSignaturePos(parsedState.finalSignaturePos);
                         setFinalSignatureSize(parsedState.finalSignatureSize);
-                        setShowSignatureBox3(parsedState.showSignatureBox3); // Debería ser false si se guardó desde Recuadro 3
+                        setShowSignatureBox3(parsedState.showSignatureBox3);
+
 
                         setErrorMessage('Proceso cargado desde URL exitosamente.');
-                        setTimeout(() => setErrorMessage(''), 3000); // Limpiar mensaje después de 3 segundos
+                        setTimeout(() => setErrorMessage(''), 3000);
+                        if (window.location.hash !== `#proceso=${idToUse}`) {
+                            window.location.hash = `proceso=${idToUse}`;
+                        }
                     } else {
-                        // Si el ID estaba en la URL pero no se encontró un estado guardado en Supabase,
-                        // significa que el enlace puede ser viejo o inválido, o no pertenece a este usuario.
-                        console.warn('ID en URL pero no hay proceso guardado en Supabase para este ID o no es tuyo. Iniciando un nuevo proceso.');
-                        const newId = generateUniqueId(); // Generar un nuevo ID único
-                        setProcessId(newId); // Establecer el nuevo ID
-                        window.location.hash = `proceso=${newId}`; // Actualizar la URL con el nuevo ID
+                        // Si el ID en la URL no llevó a un proceso válido, notificar.
+                        console.warn(`Proceso con ID ${idToUse} no encontrado o no autorizado. Iniciando uno nuevo.`);
                         setErrorMessage('Proceso no encontrado o no autorizado. Iniciando uno nuevo.');
-                        setTimeout(() => setErrorMessage(''), 5000); // Limpiar mensaje
-                        // Los estados de la aplicación se mantendrán en sus valores iniciales (limpios) por defecto.
+                        setTimeout(() => setErrorMessage(''), 5000);
+                        // IMPORTANTE: NO TOCAR selectedFile/fileUrl aquí, ya que handleFileChange se encarga
+                        // de cargarlos si el usuario sube un PDF nuevo.
                     }
                 } catch (e) {
-                    // Capturar errores durante la carga (problemas de red, datos corruptos, etc.)
-                    console.error('Error al cargar proceso desde URL (posiblemente ID corrupto o problema de red/Supabase):', e);
+                    console.error('Error al cargar proceso desde URL:', e);
                     setErrorMessage('Error al cargar proceso. Se iniciará uno nuevo.');
-                    setTimeout(() => setErrorMessage(''), 5000); // Limpiar mensaje
-                    const newId = generateUniqueId(); // Generar un nuevo ID para el nuevo proceso
-                    setProcessId(newId);
-                    window.location.hash = `proceso=${newId}`; // Actualizar la URL
+                    setTimeout(() => setErrorMessage(''), 5000);
+                    // IMPORTANTE: NO TOCAR selectedFile/fileUrl aquí.
                 }
             } else {
-                // Si no hay ningún ID en la URL al inicio, generar uno nuevo y establecerlo.
-                const newId = generateUniqueId();
-                setProcessId(newId);
-                window.location.hash = `proceso=${newId}`; // Esto actualizará la URL en el navegador
+                // Si la app carga sin ID en URL, solo se genera uno nuevo.
+                console.log("No hay ID en URL. Listo para un proceso fresco. processId:", idToUse);
+                // IMPORTANTE: NO LIMPIAR PDF AQUÍ. handleFileChange se encargará.
             }
         };
 
-        loadInitialProcess();
+        initAndLoadProcessState();
 
-        // Función de limpieza para revocar la URL Blob si el componente se desmonta o fileUrl cambia
-        // Esto es importante para liberar memoria.
-        return () => {
-            if (fileUrl) {
-                URL.revokeObjectURL(fileUrl);
-            }
-        };
-    }, [userId]); // Este efecto se ejecuta cuando userId está disponible.
+        // Este cleanup es para el propio efecto, no para el PDF general.
+        return () => {}; // Dejamos el cleanup vacío si no hay listeners específicos aquí.
+    }, [userId]);
 
 
-    // Efecto para liberar la URL del archivo al desmontar el componente (redundante con el de arriba, pero seguro)
+    // useEffect separado para limpiar fileUrl cuando cambia o cuando el componente se desmonta.
+    // Esto es más simple y predecible.
     useEffect(() => {
         return () => {
             if (fileUrl) {
@@ -207,41 +203,31 @@ function App() {
 
 
     // Efecto para el posicionamiento inicial del recuadro de firma (Recuadro 1)
-    // Se recalcula al mostrar la caja o si cambian las dimensiones del PDF/visor.
     useEffect(() => {
         if (!showSignatureBox1 || !viewerRef.current || !selectedFile || !pdfDocProxyRef.current) return;
 
         const handleInitialBoxPosition = async () => {
             const pdfPageElement = viewerRef.current.querySelector('.react-pdf__Page');
             if (!pdfPageElement || pdfPageElement.getBoundingClientRect().width === 0 || pdfPageElement.getBoundingClientRect().height === 0) {
-                console.warn('PDF Page element not found or has zero dimensions. Retrying position calculation for signature box...');
-                setTimeout(handleInitialBoxPosition, 200); // Reintentar si la página no tiene dimensiones aún
+                setTimeout(handleInitialBoxPosition, 200);
                 return;
             }
 
-            const pdfPageRect = pdfPageElement.getBoundingClientRect(); // Dimensiones del canvas renderizado en pantalla
-            const viewerRect = viewerRef.current.getBoundingClientRect(); // Dimensiones del contenedor del visor
+            const pdfPageRect = pdfPageElement.getBoundingClientRect();
+            const viewerRect = viewerRef.current.getBoundingClientRect();
 
-            // Calcular el scroll actual del visor para posicionar el recuadro correctamente
             const scrollX = viewerRef.current.scrollLeft;
             const scrollY = viewerRef.current.scrollTop;
 
-            // Calcular la posición absoluta de la página PDF *dentro del área scrollable* del visor
-            // Esta es la posición X/Y del borde superior izquierdo de la página PDF relativa al inicio del área scrollable.
             const pdfLeftInViewer = (pdfPageRect.left - viewerRect.left) + scrollX;
             const pdfTopInViewer = (pdfPageRect.top - viewerRect.top) + scrollY;
 
-            // Ajustar el ancho y alto deseado del recuadro si es necesario,
-            // por ejemplo, para que no sea más grande que la página del PDF.
-            const defaultWidth = Math.min(signatureBox1Size.width, pdfPageRect.width * 0.8); // Máx 80% del ancho del PDF
-            const defaultHeight = Math.min(signatureBox1Size.height, pdfPageRect.height * 0.8); // Máx 80% del alto del PDF
+            const defaultWidth = Math.min(signatureBox1Size.width, pdfPageRect.width * 0.8);
+            const defaultHeight = Math.min(signatureBox1Size.height, pdfPageRect.height * 0.8);
 
-            // Calcular la posición inicial del recuadro de firma al centro de la página PDF visible
             let initialX = pdfLeftInViewer + (pdfPageRect.width / 2) - (defaultWidth / 2);
             let initialY = pdfTopInViewer + (pdfPageRect.height / 2) - (defaultHeight / 2);
 
-            // Asegurar que el recuadro esté completamente dentro de los límites de la página PDF
-            // (esto es especialmente importante si el tamaño por defecto es grande o la página es pequeña)
             initialX = Math.max(pdfLeftInViewer, Math.min(initialX, pdfLeftInViewer + pdfPageRect.width - defaultWidth));
             initialY = Math.max(pdfTopInViewer, Math.min(initialY, pdfTopInViewer + pdfPageRect.height - defaultHeight));
 
@@ -257,12 +243,21 @@ function App() {
             });
         };
 
-        // Darle un pequeño tiempo al renderizado de la página PDF para que las dimensiones estén disponibles.
-        const timer = setTimeout(handleInitialBoxPosition, 100);
+        const timer = setTimeout(() => {
+            handleInitialBoxPosition();
+        }, 100);
 
-        return () => clearTimeout(timer); // Limpiar el timer al desmontar o si las dependencias cambian
+        return () => clearTimeout(timer);
 
-    }, [showSignatureBox1, selectedFile, pageNumber, scale, pdfDocProxyRef.current]);
+    }, [
+        showSignatureBox1,
+        selectedFile,
+        pageNumber,
+        scale,
+        pdfDocProxyRef,
+        signatureBox1Size.width,
+        signatureBox1Size.height
+    ]);
 
 
     // Efecto para medir el canvas del modal de dibujo (Recuadro 3)
@@ -286,32 +281,26 @@ function App() {
                                 canvas.width = measuredWidth;
                                 canvas.height = measuredHeight;
                             }
-                            sigCanvasRef.current.clear(); // Limpiar cualquier dibujo previo
-                            sigCanvasRef.current.on(); // Habilitar dibujo
+                            sigCanvasRef.current.clear();
+                            sigCanvasRef.current.on();
                         } else {
-                            console.warn("sigCanvasRef.current.canvas no está listo, reintentando...");
-                            setTimeout(measureCanvasAreaAndInitialize, 50); // Reintentar
+                            setTimeout(measureCanvasAreaAndInitialize, 50);
                         }
                     } else {
-                        console.warn("sigCanvasRef.current no está listo, reintentando...");
-                        setTimeout(measureCanvasAreaAndInitialize, 50); // Reintentar
+                        setTimeout(measureCanvasAreaAndInitialize, 50);
                     }
                 } else {
-                    console.warn("Área de canvas de firma tiene dimensiones cero, reintentando medida...");
-                    setTimeout(measureCanvasAreaAndInitialize, 100); // Reintentar
+                    setTimeout(measureCanvasAreaAndInitialize, 100);
                 }
             }
         };
 
-        // Iniciar la medición inicial del canvas del modal
         const initialMeasureTimer = setTimeout(() => {
             measureCanvasAreaAndInitialize();
         }, 100);
 
-        // Añadir listener para re-medir el canvas si la ventana cambia de tamaño
         window.addEventListener('resize', measureCanvasAreaAndInitialize);
 
-        // Función de limpieza para eliminar el listener del evento resize
         return () => {
             clearTimeout(initialMeasureTimer);
             window.removeEventListener('resize', measureCanvasAreaAndInitialize);
@@ -319,19 +308,18 @@ function App() {
     }, [showSignatureBox3]);
 
 
-    // Handler para cuando se selecciona un nuevo archivo PDF
     const handleFileChange = async (event) => {
         const file = event.target.files[0];
-        setErrorMessage(''); // Limpiar mensajes de error previos
-        setSelectedFile(null); // Resetear archivo seleccionado
-        if (fileUrl) URL.revokeObjectURL(fileUrl); // Limpiar URL Blob anterior si existe para liberar memoria
-        setFileUrl(null); // Resetear URL del archivo
-        setNumPages(null); // Resetear número de páginas
-        setPageNumber(1); // Volver a la primera página
-        setScale(1.0); // Resetear zoom
-        pdfDocProxyRef.current = null; // Resetear referencia al proxy del PDF
-        setPdfOriginalBuffer(null); // Resetear buffer del PDF
-        // Resetear estados de los recuadros de firma
+        setErrorMessage('');
+        // Limpiar todos los estados relacionados con el PDF antes de cargar el nuevo.
+        setSelectedFile(null); 
+        if (fileUrl) URL.revokeObjectURL(fileUrl);
+        setFileUrl(null); 
+        setNumPages(null);
+        setPageNumber(1);
+        setScale(1.0);
+        pdfDocProxyRef.current = null;
+        setPdfOriginalBuffer(null);
         setShowSignatureBox1(false);
         setShowSignatureBox2(false);
         setShowSignatureBox3(false);
@@ -339,18 +327,16 @@ function App() {
         setSignatureBox1Size({ width: 200, height: 100 });
         setIsDraggingBox(false);
         setIsResizingBox(false);
-        setHasSignatureApplied(false); // Resetear si se han aplicado firmas
-        setShowHelpModal(false); // Asegurar que el modal de ayuda está cerrado
+        setHasSignatureApplied(false);
+        setShowHelpModal(false);
 
-        // Generar un nuevo processId y actualizar la URL al cargar un nuevo PDF
-        // Esto asegura una URL única para cada nuevo archivo cargado.
-        const newId = generateUniqueId(); // Usar la función general
+        // Al cargar un nuevo archivo, SIEMPRE generamos un nuevo processId y actualizamos la URL.
+        const newId = generateUniqueId();
         setProcessId(newId);
-        window.location.hash = `proceso=${newId}`; // Actualizar el hash de la URL en el navegador
-
-
+        window.location.hash = `proceso=${newId}`;
+        
         if (file) {
-            const MAX_FILE_SIZE_MB = 48; // Límite de tamaño de archivo PDF
+            const MAX_FILE_SIZE_MB = 48;
             const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
             if (file.type !== 'application/pdf') {
@@ -364,11 +350,11 @@ function App() {
             }
 
             try {
-                const buffer = await file.arrayBuffer(); // Leer el archivo como ArrayBuffer
-                setPdfOriginalBuffer(arrayBufferEncode(buffer)); // Codificar a Base64 para guardar en estado (y luego Supabase)
-                setSelectedFile(file); // Guardar la referencia al archivo seleccionado
-                // Crear una URL Blob para que react-pdf pueda renderizar el PDF
-                setFileUrl(URL.createObjectURL(new Blob([buffer], { type: 'application/pdf' })));
+                const buffer = await file.arrayBuffer();
+                setPdfOriginalBuffer(arrayBufferEncode(buffer));
+                const tempFileUrl = URL.createObjectURL(new Blob([buffer], { type: 'application/pdf' }));
+                setFileUrl(tempFileUrl); // Establece el fileUrl
+                setSelectedFile(file); // Establece selectedFile
                 console.log('Archivo PDF válido seleccionado:', file.name, 'Tamaño:', file.size, 'bytes');
             } catch (error) {
                 console.error('Error al cargar el PDF:', error);
@@ -377,37 +363,29 @@ function App() {
         }
     };
 
-    // Handler para cuando el documento PDF se carga correctamente en react-pdf
     const onDocumentLoadSuccess = ({ numPages: newNumPages, originalDocument }) => {
-        setNumPages(newNumPages); // Actualizar el número total de páginas
-        // Ajustar pageNumber solo si es necesario (evita sobrescribir si se cargó un proceso guardado)
+        setNumPages(newNumPages);
         if (pageNumber === 1 || pageNumber > newNumPages) {
-            setPageNumber(1); // Si la página actual es la primera o inválida, ir a la 1
+            setPageNumber(1);
         }
-        // Reiniciar scroll del visor
         if (viewerRef.current) {
             viewerRef.current.scrollLeft = 0;
             viewerRef.current.scrollTop = 0;
         }
-        pdfDocProxyRef.current = originalDocument; // Guardar referencia al objeto de documento de react-pdf
+        pdfDocProxyRef.current = originalDocument;
 
-        // Ajustar la escala inicial del PDF para que quepa en el visor
         if (originalDocument && viewerRef.current) {
             originalDocument.getPage(1).then(page => {
                 const viewport = page.getViewport({ scale: 1.0 });
-                // Calcular el ancho disponible en el visor (considerando padding)
                 const viewerInnerWidth = viewerRef.current ? viewerRef.current.clientWidth - (15 * 2) : viewport.width;
-                // Solo ajustar la escala si no se ha cargado de un proceso guardado (donde la escala ya viene definida)
-                // o si la escala actual es la por defecto (1.0)
                 if (scale === 1.0) {
                     const initialScale = viewerInnerWidth / viewport.width;
-                    setScale(Math.min(initialScale, 1.5)); // Limitar la escala máxima para evitar PDFs gigantes
+                    setScale(Math.min(initialScale, 1.5));
                 }
             }).catch(err => console.error("Error getting page for initial scale:", err));
         }
     };
 
-    // Navegación de página
     const goToNextPage = () => {
         setPageNumber((prevPageNumber) => Math.min(prevPageNumber + 1, numPages));
     };
@@ -415,18 +393,15 @@ function App() {
         setPageNumber((prevPageNumber) => Math.max(prevPageNumber - 1, 1));
     };
 
-    // Arrastre del visor de PDF (mouse wheel zoom)
     const handleMouseWheelZoom = (event) => {
-        // Solo permitir zoom con rueda si no hay procesos de arrastre o redimensionamiento activos
         if (isDragging || isDraggingBox || isResizingBox) return;
 
-        event.preventDefault(); // Evitar el scroll de la página
+        event.preventDefault();
 
-        const delta = event.deltaY * -0.001; // Invertir el scroll para zoom y ajustar sensibilidad
-        setScale((prevScale) => Math.max(0.5, Math.min(prevScale + delta, 3.0))); // Limitar zoom entre 0.5 y 3.0
+        const delta = event.deltaY * -0.001;
+        setScale((prevScale) => Math.max(0.5, Math.min(prevScale + delta, 3.0)));
     };
 
-    // Función para calcular la distancia entre dos puntos de toque
     const getPinchDistance = (touches) => {
         if (touches.length < 2) return null;
         const dx = touches[0].clientX - touches[1].clientX;
@@ -441,65 +416,56 @@ function App() {
         return { clientX: e.clientX, clientY: e.clientY };
     };
 
-    const onStartInteraction = (e) => { // Usado para onMouseDown y onTouchStart
-        // Si el evento de inicio es de un recuadro de firma o modal, dejar que lo manejen ellos.
+    const onStartInteraction = (e) => {
         if (e.target.closest('.signature-box-1') || e.target.closest('.signature-box-1-resize-handle') || e.target.closest('.signature-box-2') || e.target.closest('.signature-box-3-modal') || showHelpModal) {
             return;
         }
 
-        // Prevenir el comportamiento por defecto del navegador (importante para móviles)
         e.preventDefault();
-        e.stopPropagation(); // Evitar que el evento se propague si es un elemento interactivo anidado
+        e.stopPropagation();
 
         if (viewerRef.current) {
             if (e.touches && e.touches.length === 2) {
-                // Iniciar pellizco para zoom
-                setIsDragging(false); // Asegurar que no estamos arrastrando el PDF
+                setIsDragging(false);
                 const distance = getPinchDistance(e.touches);
                 setInitialPinchDistance(distance);
-                setInitialPinchScale(scale); // Guardar la escala actual al inicio del pellizco
+                setInitialPinchScale(scale);
                 console.log("Iniciando pellizco. Distancia inicial:", distance, "Escala inicial:", scale);
-            } else if (e.touches && e.touches.length === 1 || !e.touches) {
-                // Iniciar arrastre (mouse o un dedo)
-                setInitialPinchDistance(null); // Resetear pellizco
+            } else if ((e.touches && e.touches.length === 1) || !e.touches) {
+                setInitialPinchDistance(null);
                 setIsDragging(true);
                 const { clientX, clientY } = getEventClientCoords(e);
                 setStartX(clientX - viewerRef.current.offsetLeft);
                 setStartY(clientY - viewerRef.current.offsetTop);
                 setScrollLeftInitial(viewerRef.current.scrollLeft);
                 setScrollTopInitial(viewerRef.current.scrollTop);
-                viewerRef.current.style.cursor = 'grabbing'; // Cambiar cursor a "grabbing"
+                viewerRef.current.style.cursor = 'grabbing';
             }
         }
     };
 
-    const onMoveInteraction = useCallback((e) => { // Usado para onMouseMove y onTouchMove
-        // Si no estamos arrastrando el PDF, redimensionando o arrastrando el recuadro, salir
+    const onMoveInteraction = useCallback((e) => {
         if (!isDragging && !isResizingBox && !isDraggingBox && !initialPinchDistance) return;
-        e.preventDefault(); // Prevenir el comportamiento por defecto del navegador (ej. selección de texto, scroll, zoom de página)
+        e.preventDefault();
 
         const { clientX, clientY } = getEventClientCoords(e);
 
         if (initialPinchDistance && e.touches && e.touches.length === 2) {
-            // Lógica para zoom con pellizcos
             const currentDistance = getPinchDistance(e.touches);
-            if (currentDistance === null) return; // Esto no debería pasar con length === 2
+            if (currentDistance === null) return;
 
             const newScale = initialPinchScale * (currentDistance / initialPinchDistance);
-            setScale(Math.max(0.5, Math.min(newScale, 3.0))); // Limitar zoom entre 0.5 y 3.0
-            // console.log("Pellizco en movimiento. Nueva escala:", newScale.toFixed(2));
-        } else if (isDragging && (e.touches && e.touches.length === 1 || !e.touches)) {
-            // Lógica para arrastrar el PDF (solo si es un dedo o ratón, y si el pellizco no está activo)
+            setScale(Math.max(0.5, Math.min(newScale, 3.0)));
+        } else if (isDragging && ((e.touches && e.touches.length === 1) || !e.touches)) {
             if (viewerRef.current) {
                 const x = clientX - viewerRef.current.offsetLeft;
                 const y = clientY - viewerRef.current.offsetTop;
-                const walkX = (x - startX); // Distancia arrastrada en X
-                const walkY = (y - startY); // Distancia arrastrada en Y
-                viewerRef.current.scrollLeft = scrollLeftInitial - walkX; // Mover scroll horizontalmente
-                viewerRef.current.scrollTop = scrollTopInitial - walkY; // Mover scroll verticalmente
+                const walkX = (x - startX);
+                const walkY = (y - startY);
+                viewerRef.current.scrollLeft = scrollLeftInitial - walkX;
+                viewerRef.current.scrollTop = scrollTopInitial - walkY;
             }
-        } else if (isResizingBox) { // Lógica para redimensionar el recuadro de firma (Recuadro 1)
-            // Asegurarse de que las referencias iniciales existan
+        } else if (isResizingBox) {
             if (!initialBoxRect || !initialMousePos) {
                 console.warn('initialBoxRect o initialMousePos es null en onMoveInteraction (redimensionamiento). Saltando.');
                 return;
@@ -509,13 +475,12 @@ function App() {
             const pdfPageElement = viewerRef.current.querySelector('.react-pdf__Page');
             if (!pdfPageElement) return;
 
-            const pdfPageRect = pdfPageElement.getBoundingClientRect(); // Dimensiones del canvas del PDF en pantalla
+            const pdfPageRect = pdfPageElement.getBoundingClientRect();
             const viewerRect = viewerRef.current.getBoundingClientRect();
 
             const scrollX = viewerRef.current.scrollLeft;
             const scrollY = viewerRef.current.scrollTop;
 
-            // Calcular la posición absoluta de la página PDF *dentro del área scrollable* del visor
             const pdfLeftInViewer = (pdfPageRect.left - viewerRect.left) + scrollX;
             const pdfTopInViewer = (pdfPageRect.top - viewerRect.top) + scrollY;
             const pdfRightInViewer = pdfLeftInViewer + pdfPageRect.width;
@@ -529,54 +494,41 @@ function App() {
             let newX = initialBoxRect.x;
             let newY = initialBoxRect.y;
 
-            const mouseDeltaX = mouseCurrentX - initialMousePos.x; // Cambio en posición X del ratón/dedo
-            const mouseDeltaY = mouseCurrentY - initialMousePos.y; // Cambio en posición Y del ratón/dedo
+            const mouseDeltaX = mouseCurrentX - initialMousePos.x;
+            const mouseDeltaY = mouseCurrentY - initialMousePos.y;
 
-            const MIN_BOX_SIZE = 50; // Tamaño mínimo para el recuadro
+            const MIN_BOX_SIZE = 50;
 
-            // Aplicar lógica de redimensionamiento según el "handle" arrastrado
-            if (resizeHandleType === 'br') { // Bottom-Right (redimensiona ancho y alto)
+            if (resizeHandleType === 'br') {
                 newWidth = initialBoxRect.width + mouseDeltaX;
                 newHeight = initialBoxRect.height + mouseDeltaY;
-            } else if (resizeHandleType === 'bl') { // Bottom-Left (redimensiona ancho y mueve X, redimensiona alto)
+            } else if (resizeHandleType === 'bl') {
                 newWidth = initialBoxRect.width - mouseDeltaX;
                 newHeight = initialBoxRect.height + mouseDeltaY;
-                newX = initialBoxRect.x + mouseDeltaX; // Mover X al redimensionar desde la izquierda
+                newX = initialBoxRect.x + mouseDeltaX;
             }
 
-            // Asegurar que el tamaño no sea menor al mínimo
             newWidth = Math.max(newWidth, MIN_BOX_SIZE);
             newHeight = Math.max(newHeight, MIN_BOX_SIZE);
 
-            // Limitar la posición para que el recuadro no se salga de la página PDF
-            // Primero, ajustamos la posición x/y basándonos en los límites de la página
             newX = Math.max(pdfLeftInViewer, newX);
             newY = Math.max(pdfTopInViewer, newY);
 
-            // Luego, ajustamos el ancho/alto para que no se extienda más allá del límite derecho/inferior de la página
             newWidth = Math.min(newWidth, pdfRightInViewer - newX);
             newHeight = Math.min(newHeight, pdfBottomInViewer - newY);
 
-            // Finalmente, volvemos a asegurar el tamaño mínimo después de los ajustes de límite,
-            // por si el ajuste de límite lo hizo más pequeño que MIN_BOX_SIZE (ej. si la página es muy pequeña)
             newWidth = Math.max(newWidth, MIN_BOX_SIZE);
             newHeight = Math.max(newHeight, MIN_BOX_SIZE);
 
-            // Si al re-asegurar el tamaño mínimo, el recuadro se sale por la izquierda o arriba (solo si se redimensiona desde BL)
-            // Ajustar la posición X para que el borde derecho no se mueva al crecer desde la izquierda
             if (resizeHandleType === 'bl' && newWidth > initialBoxRect.width - mouseDeltaX) {
-                // Esta es una corrección sutil: si el nuevo ancho es mayor que el que se calcularía solo por el mouseDeltaX
-                // (debido a la restricción de MIN_BOX_SIZE o límite de página), entonces la X también debe ajustarse
-                // para mantener el borde derecho en su lugar (o cerca de él).
                 newX = initialBoxRect.x - (newWidth - (initialBoxRect.width - mouseDeltaX));
-                newX = Math.max(pdfLeftInViewer, newX); // Asegurar que no se salga del borde izquierdo del PDF
+                newX = Math.max(pdfLeftInViewer, newX);
             }
 
-            // Actualizar los estados del recuadro
             setSignatureBox1Pos({ x: newX, y: newY });
             setSignatureBox1Size({ width: newWidth, height: newHeight });
 
-        } else if (isDraggingBox) { // Lógica para arrastrar el recuadro de firma (Recuadro 1)
+        } else if (isDraggingBox) {
             if (!viewerRef.current) return;
             const pdfPageElement = viewerRef.current.querySelector('.react-pdf__Page');
             if (!pdfPageElement) return;
@@ -587,17 +539,14 @@ function App() {
             const scrollX = viewerRef.current.scrollLeft;
             const scrollY = viewerRef.current.scrollTop;
 
-            // Calcular límites de la página PDF *dentro del área scrollable* del visor
             const pdfLeftInViewer = (pdfPageRect.left - viewerRect.left) + scrollX;
             const pdfTopInViewer = (pdfPageRect.top - viewerRect.top) + scrollY;
             const pdfRightInViewer = pdfLeftInViewer + pdfPageRect.width;
             const pdfBottomInViewer = pdfTopInViewer + pdfPageRect.height;
 
-            // Calcular la nueva posición del recuadro basándose en el movimiento del ratón/dedo y el offset inicial
             const newX = (clientX - viewerRect.left) + scrollX - boxDragOffsetX;
             const newY = (clientY - viewerRect.top) + scrollY - boxDragOffsetY;
 
-            // Limitar las coordenadas para que el recuadro no se salga de la página PDF
             let finalX = Math.max(pdfLeftInViewer, Math.min(newX, pdfRightInViewer - signatureBox1Size.width));
             let finalY = Math.max(pdfTopInViewer, Math.min(newY, pdfBottomInViewer - signatureBox1Size.height));
 
@@ -606,51 +555,46 @@ function App() {
     }, [
         isDragging, isResizingBox, isDraggingBox, initialPinchDistance,
         startX, startY, scrollLeftInitial, scrollTopInitial, initialPinchScale,
-        initialBoxRect, initialMousePos, resizeHandleType, // Dependencias para redimensionamiento/arrastre
-        signatureBox1Pos, signatureBox1Size, boxDragOffsetX, boxDragOffsetY
+        initialBoxRect, initialMousePos, resizeHandleType,
+        signatureBox1Pos,
+        signatureBox1Size, boxDragOffsetX, boxDragOffsetY
     ]);
 
-    const onEndInteraction = useCallback(() => { // Usado para onMouseUp y onTouchEnd
+    const onEndInteraction = useCallback(() => {
         setIsDragging(false);
         setIsDraggingBox(false);
         setIsResizingBox(false);
         setResizeHandleType(null);
-        setInitialMousePos(null); // Limpiar estado inicial del ratón
-        setInitialBoxRect(null); // Limpiar estado inicial del recuadro
-        setInitialPinchDistance(null); // Limpiar estado de pellizco
+        setInitialMousePos(null);
+        setInitialBoxRect(null);
+        setInitialPinchDistance(null);
 
         if (viewerRef.current) {
-            viewerRef.current.style.cursor = 'grab'; // Restaurar cursor del visor
+            viewerRef.current.style.cursor = 'grab';
         }
     }, []);
 
-    // Handler global para cuando el puntero sale de la ventana (detiene arrastre/redimensionamiento)
-    const onLeaveWindowGlobal = useCallback(() => { // Usado para onMouseLeave
+    const onLeaveWindowGlobal = useCallback(() => {
         if (isDragging || isDraggingBox || isResizingBox || initialPinchDistance) {
-            onEndInteraction(); // Finalizar cualquier operación activa
+            onEndInteraction();
         }
     }, [isDragging, isDraggingBox, isResizingBox, initialPinchDistance, onEndInteraction]);
 
 
-    // Configuración de listeners de eventos globales al montar el componente
     useEffect(() => {
-        // Eventos de ratón
         window.addEventListener('mouseup', onEndInteraction);
         window.addEventListener('mousemove', onMoveInteraction);
-        window.addEventListener('mouseleave', onLeaveWindowGlobal); // Para cuando el ratón sale de la ventana
+        window.addEventListener('mouseleave', onLeaveWindowGlobal);
 
-        // Eventos táctiles
         window.addEventListener('touchend', onEndInteraction);
-        window.addEventListener('touchmove', onMoveInteraction, { passive: false }); // `passive: false` para permitir preventDefault
-        window.addEventListener('touchcancel', onEndInteraction); // En caso de interrupción táctil
+        window.addEventListener('touchmove', onMoveInteraction, { passive: false });
+        window.addEventListener('touchcancel', onEndInteraction);
 
-        return () => { // Función de limpieza para remover listeners al desmontar
-            // Remover eventos de ratón
+        return () => {
             window.removeEventListener('mouseup', onEndInteraction);
             window.removeEventListener('mousemove', onMoveInteraction);
             window.removeEventListener('mouseleave', onLeaveWindowGlobal);
 
-            // Remover eventos táctiles
             window.removeEventListener('touchend', onEndInteraction);
             window.removeEventListener('touchmove', onMoveInteraction);
             window.removeEventListener('touchcancel', onEndInteraction);
@@ -658,22 +602,18 @@ function App() {
     }, [onEndInteraction, onMoveInteraction, onLeaveWindowGlobal]);
 
 
-    // Handler para iniciar el arrastre del recuadro de firma (Recuadro 1)
-    const onSignatureBoxStart = (e) => { // Usado para onMouseDown y onTouchStart
-        e.stopPropagation(); // Prevenir que el evento se propague al visor del PDF
-        e.preventDefault(); // ¡NUEVO Y CRUCIAL! Evitar comportamiento de scroll/zoom del navegador
+    const onSignatureBoxStart = (e) => {
+        e.stopPropagation();
+        e.preventDefault();
 
-        // Si el clic/toque es en un handle de redimensionamiento, no iniciar el arrastre de la caja completa
         if (e.target.classList.contains('signature-box-1-resize-handle')) {
             return;
         }
 
-        setIsDraggingBox(true); // Activar arrastre del recuadro
+        setIsDraggingBox(true);
         const { clientX, clientY } = getEventClientCoords(e);
-        // Calcular offset del clic dentro del recuadro
         setBoxDragOffsetX(clientX - e.currentTarget.getBoundingClientRect().left);
         setBoxDragOffsetY(clientY - e.currentTarget.getBoundingClientRect().top);
-        // Guardar posición inicial del ratón/dedo y el recuadro para cálculos precisos al mover
         setInitialMousePos({ x: clientX, y: clientY });
         setInitialBoxRect({
             x: signatureBox1Pos.x,
@@ -683,14 +623,12 @@ function App() {
         });
     };
 
-    // Handler para iniciar el redimensionamiento del recuadro de firma (Recuadro 1)
-    const onResizeHandleStart = (e, type) => { // Usado para onMouseDown y onTouchStart
-        e.stopPropagation(); // Prevenir que el evento se propague
-        e.preventDefault(); // ¡NUEVO Y CRUCIAL! Evitar comportamiento de scroll/zoom del navegador
-        setIsResizingBox(true); // Activar redimensionamiento
-        setResizeHandleType(type); // Establecer el tipo de handle (ej. 'br' (bottom-right), 'bl' (bottom-left))
+    const onResizeHandleStart = (e, type) => {
+        e.stopPropagation();
+        e.preventDefault();
+        setIsResizingBox(true);
+        setResizeHandleType(type);
         const { clientX, clientY } = getEventClientCoords(e);
-        // Guardar posición inicial del recuadro y del ratón/dedo para cálculos de redimensionamiento
         setInitialBoxRect({
             x: signatureBox1Pos.x,
             y: signatureBox1Pos.y,
@@ -701,67 +639,59 @@ function App() {
     };
 
 
-    // Variable de conveniencia para deshabilitar botones si hay un proceso activo (firma o modal de ayuda)
     const isProcessActive = showSignatureBox1 || showSignatureBox2 || showSignatureBox3 || showHelpModal;
     const isAddSignatureButtonDisabled = !selectedFile || errorMessage || isProcessActive;
 
-    // Handler para el botón "Añadir Firma"
     const handleAddSignatureClick = () => {
         if (isAddSignatureButtonDisabled) {
             setErrorMessage('Por favor, sube un PDF y/o finaliza el proceso de firma actual antes de añadir otra.');
             setTimeout(() => setErrorMessage(''), 3000);
             return;
         }
-        setErrorMessage(''); // Limpiar errores
-        // Mostrar Recuadro 1 e inicializar su posición/tamaño
+        setErrorMessage('');
         setShowSignatureBox1(true);
         setShowSignatureBox2(false);
         setShowSignatureBox3(false);
-        // La posición inicial se calculará en useEffect
-        // setSignatureBox1Pos({ x: 0, y: 0 }); // Ya no es necesario inicializar aquí
-        // setSignatureBox1Size({ width: 200, height: 100 }); // Ya no es necesario inicializar aquí
         setIsDraggingBox(false);
         setIsResizingBox(false);
     };
 
-    // Handlers para los botones de control de los recuadros de firma
     const handleCancelSignatureBox1 = () => {
         setShowSignatureBox1(false);
     };
     const handleConfirmSignatureBox1 = () => {
-        setFinalSignaturePos(signatureBox1Pos); // Confirmar posición del recuadro 1
-        setFinalSignatureSize(signatureBox1Size); // Confirmar tamaño del recuadro 1
-        setShowSignatureBox1(false); // Ocultar Recuadro 1
-        setShowSignatureBox2(true); // Mostrar Recuadro 2
+        setFinalSignaturePos(signatureBox1Pos);
+        setFinalSignatureSize(signatureBox1Size);
+        setShowSignatureBox1(false);
+        setShowSignatureBox2(true);
     };
     const handleCancelSignatureBox2 = () => {
-        setShowSignatureBox2(false); // Ocultar Recuadro 2
-        setShowSignatureBox1(true); // Volver a mostrar Recuadro 1 para reajustar
+        setShowSignatureBox2(false);
+        setShowSignatureBox1(true);
     };
     const handleConfirmSignature2 = () => {
-        setShowSignatureBox2(false); // Ocultar Recuadro 2
-        setShowSignatureBox3(true); // Mostrar Recuadro 3 (modal de dibujo)
+        setShowSignatureBox2(false);
+        setShowSignatureBox3(true);
     };
     const handleCancelSignatureBox3 = () => {
-        setShowSignatureBox3(false); // Ocultar Recuadro 3
-        setShowSignatureBox2(true); // Volver a mostrar Recuadro 2 (para re-dibujar si se desea)
+        setShowSignatureBox3(false);
+        setShowSignatureBox2(true);
         if (sigCanvasRef.current) {
-            sigCanvasRef.current.clear(); // Limpiar canvas de firma
+            sigCanvasRef.current.clear();
         }
     };
     const handleClearSignature = () => {
         if (sigCanvasRef.current) {
-            sigCanvasRef.current.clear(); // Limpiar canvas de firma
+            sigCanvasRef.current.clear();
         }
     };
 
-    // Handler para incrustar la firma en el PDF
     const handleConfirmSignature3 = async () => {
         if (sigCanvasRef.current && !sigCanvasRef.current.isEmpty()) {
-            const signatureDataURL = sigCanvasRef.current.toDataURL('image/png'); // Obtener la firma como DataURL
+            const signatureDataURL = sigCanvasRef.current.toDataURL('image/png');
 
-            setShowSignatureBox3(false); // Ocultar el modal de dibujo
-            sigCanvasRef.current.clear(); // Limpiar el canvas de firma para la próxima vez
+            setShowSignatureBox3(false);
+            sigCanvasRef.current.clear();
 
             if (!pdfOriginalBuffer) {
                 console.error('No hay un buffer de PDF (Base64) válido en el estado para incrustar la firma.');
@@ -771,7 +701,7 @@ function App() {
 
             let pdfArrayBuffer;
             try {
-                pdfArrayBuffer = arrayBufferDecode(pdfOriginalBuffer); // Decodificar el PDF actual de Base64 a ArrayBuffer
+                pdfArrayBuffer = arrayBufferDecode(pdfOriginalBuffer);
             } catch (error) {
                 console.error('Error al decodificar el buffer Base64 del PDF:', error);
                 setErrorMessage('Error: No se pudo preparar el PDF para la firma. Intenta cargarlo de nuevo.');
@@ -779,16 +709,16 @@ function App() {
             }
 
             try {
-                const pdfDoc = await PDFDocument.load(pdfArrayBuffer); // Cargar el PDF con pdf-lib
-                const signatureImage = await pdfDoc.embedPng(signatureDataURL); // Incrustar la imagen de la firma
+                const pdfDoc = await PDFDocument.load(pdfArrayBuffer);
+                const signatureImage = await pdfDoc.embedPng(signatureDataURL);
 
                 const pages = pdfDoc.getPages();
                 if (pageNumber < 1 || pageNumber > pages.length) {
                     throw new Error(`Página ${pageNumber} fuera de rango. Total páginas: ${pages.length}`);
                 }
-                const currentPage = pages[pageNumber - 1]; // Obtener la página actual del PDF (índice base 0)
+                const currentPage = pages[pageNumber - 1];
 
-                const pageSize = currentPage.getSize(); // Obtener las dimensiones nativas de la página del PDF
+                const pageSize = currentPage.getSize();
                 const pdfNativeWidth = pageSize.width;
                 const pdfNativeHeight = pageSize.height;
 
@@ -798,31 +728,23 @@ function App() {
                     setErrorMessage('Error: El visor de PDF no está listo para la incrustación.');
                     return;
                 }
-                const pdfPageRect = pdfPageElement.getBoundingClientRect(); // Dimensiones del canvas renderizado en pantalla
-                const viewerRect = viewerRef.current.getBoundingClientRect(); // Dimensiones del contenedor del visor
+                const pdfPageRect = pdfPageElement.getBoundingClientRect();
+                const viewerRect = viewerRef.current.getBoundingClientRect();
 
-                // Calcular el scroll actual del visor
                 const scrollX = viewerRef.current.scrollLeft;
                 const scrollY = viewerRef.current.scrollTop;
 
-                // Calcular la posición absoluta de la página PDF *dentro del área scrollable* del visor
-                // Esto es la posición X/Y del borde superior izquierdo de la página PDF relativa al inicio del área scrollable.
                 const pdfLeftInViewer = (pdfPageRect.left - viewerRect.left) + scrollX;
                 const pdfTopInViewer = (pdfPageRect.top - viewerRect.top) + scrollY;
 
-                // Calcular la relación de escala entre el PDF nativo y el PDF renderizado en el DOM
                 const scaleX = pdfPageRect.width / pdfNativeWidth;
                 const scaleY = pdfPageRect.height / pdfNativeHeight;
 
-                // Convertir la posición y tamaño del recuadro (en coordenadas de pantalla/visor)
-                // a las coordenadas nativas del PDF
                 const signatureXInPdfNative = (finalSignaturePos.x - pdfLeftInViewer) / scaleX;
                 const signatureYInPdfNative = (finalSignaturePos.y - pdfTopInViewer) / scaleY;
                 const signatureWidthInPdfNative = finalSignatureSize.width / scaleX;
                 const signatureHeightInPdfNative = finalSignatureSize.height / scaleY;
 
-                // IMPORTANTÍSIMO: Las coordenadas Y en pdf-lib son desde la parte inferior de la página, no la superior.
-                // Necesitamos ajustar la Y para dibujar correctamente.
                 const drawY = pdfNativeHeight - (signatureYInPdfNative + signatureHeightInPdfNative);
 
                 console.log("Incrustando firma:", {
@@ -836,27 +758,24 @@ function App() {
                     drawYInPdfLib: drawY.toFixed(2)
                 });
 
-                // Dibujar la firma en la página del PDF
                 currentPage.drawImage(signatureImage, {
                     x: signatureXInPdfNative,
                     y: drawY,
                     width: signatureWidthInPdfNative,
                     height: signatureHeightInPdfNative,
-                    opacity: 1, // Opacidad de la firma
+                    opacity: 1,
                 });
 
-                const modifiedPdfBytes = await pdfDoc.save(); // Guardar el PDF modificado
-                const modifiedPdfBlob = new Blob([modifiedPdfBytes], { type: 'application/pdf' }); // Crear un Blob
+                const modifiedPdfBytes = await pdfDoc.save();
+                const modifiedPdfBlob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
 
-                // Revocar la URL anterior y crear una nueva para el PDF modificado
                 if (fileUrl) URL.revokeObjectURL(fileUrl);
                 setFileUrl(URL.createObjectURL(modifiedPdfBlob));
-                setSelectedFile(modifiedPdfBlob); // Actualizar selectedFile para que represente el PDF modificado
+                setSelectedFile(modifiedPdfBlob);
 
-                // Actualizar el buffer del PDF en Base64 con la versión firmada
                 setPdfOriginalBuffer(arrayBufferEncode(modifiedPdfBytes));
 
-                setHasSignatureApplied(true); // Marcar que al menos una firma ha sido aplicada exitosamente
+                setHasSignatureApplied(true);
 
                 console.log('Firma incrustada exitosamente en el PDF.');
                 setErrorMessage('Firma añadida exitosamente.');
@@ -865,7 +784,7 @@ function App() {
             } catch (error) {
                 console.error('Error al incrustar la firma:', error);
                 setErrorMessage(`Error al incrustar la firma. Detalles: ${error.message}. ¿El PDF está protegido o hay un problema con las coordenadas?`);
-                setShowSignatureBox2(true); // Si hay un error, volver al paso de confirmación del área
+                setShowSignatureBox2(true);
             }
         } else {
             console.warn('No se dibujó ninguna firma.');
@@ -874,19 +793,17 @@ function App() {
         }
     };
 
-    // Función para guardar el PDF actual (descargar a la computadora del usuario)
     const handleSavePdf = () => {
         if (fileUrl) {
-            const a = document.createElement('a'); // Crear un elemento <a> temporal
-            a.href = fileUrl; // Establecer el href a la URL del PDF actual
-            // Generar un nombre de archivo, añadiendo "_firmado.pdf" si ya tiene .pdf
+            const a = document.createElement('a');
+            a.href = fileUrl;
             const filename = selectedFile && selectedFile.name ?
                 selectedFile.name.replace(/\.pdf$/, '_firmado.pdf') :
                 'documento_firmado.pdf';
-            a.download = filename; // Establecer el nombre para la descarga
-            document.body.appendChild(a); // Añadir el enlace al DOM
-            a.click(); // Simular un clic en el enlace para iniciar la descarga
-            document.body.removeChild(a); // Eliminar el enlace del DOM
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
             setErrorMessage('PDF guardado exitosamente en tu dispositivo.');
             setTimeout(() => setErrorMessage(''), 3000);
         } else {
@@ -895,54 +812,65 @@ function App() {
         }
     };
 
-    // NUEVA FUNCIÓN: Para guardar el estado del proceso en Supabase
     const handleSaveProcess = async () => {
         if (!selectedFile) {
             setErrorMessage('Carga un PDF antes de guardar el proceso.');
             setTimeout(() => setErrorMessage(''), 3000);
             return;
         }
-        // Asegurarse de que tenemos un ID de proceso y un ID de usuario
-        if (!processId || !userId) {
-            setErrorMessage('Error: ID de proceso o usuario no disponible. Intenta recargar la página.');
+        // Asegúrate de que processId y userId están presentes.
+        // Si no hay processId, generamos uno nuevo. Esto puede pasar si el usuario no ha subido un PDF
+        // pero de alguna manera el botón de guardar proceso no está deshabilitado.
+        let idToSave = processId;
+        if (!idToSave) {
+            idToSave = generateUniqueId();
+            setProcessId(idToSave); // Actualiza el estado para reflejar el nuevo ID
+        }
+
+        if (!userId) { // userId siempre debería existir a estas alturas.
+            setErrorMessage('Error: ID de usuario no disponible. Intenta recargar la página.');
             setTimeout(() => setErrorMessage(''), 7000);
             return;
         }
 
         try {
-            // Capturar el estado relevante de la aplicación
             const processState = {
-                pdfOriginalBuffer: pdfOriginalBuffer, // El PDF actual (Base64)
-                numPages, // Número total de páginas
-                pageNumber, // Página actual
-                scale, // Nivel de zoom
-                hasSignatureApplied, // Si se han aplicado firmas
+                pdfOriginalBuffer: pdfOriginalBuffer,
+                numPages,
+                pageNumber,
+                scale,
+                hasSignatureApplied,
                 showSignatureBox1,
                 signatureBox1Pos,
                 signatureBox1Size,
                 showSignatureBox2,
                 finalSignaturePos,
                 finalSignatureSize,
-                showSignatureBox3: false // Siempre guardar como false para que el proceso retome desde Recuadro 2 si estaba dibujando
+                showSignatureBox3: false
             };
 
-            // Realizar un 'upsert' en la tabla 'process_states' de Supabase
-            // Si el 'id' (processId) ya existe, actualiza; si no, inserta uno nuevo.
-            // eslint-disable-next-line no-unused-vars
             const { data, error } = await supabase
                 .from('process_states')
                 .upsert(
                     {
-                        id: processId, // Usar el processId actual como ID del registro en la BD
-                        user_id: userId, // Guardar el ID del usuario que lo guardó
-                        state_data: processState, // Guardar el objeto de estado completo
-                        // created_at se genera automáticamente en Supabase si no se proporciona
+                        id: idToSave, // Usamos idToSave que ya tiene un valor garantizado
+                        user_id: userId,
+                        state_data: processState,
                     },
-                    { onConflict: 'id' } // Estrategia de conflicto: actualizar si el ID existe
+                    { onConflict: 'id' }
                 );
 
             if (error) {
-                throw error; // Lanzar el error si Supabase reporta uno
+                throw error;
+            }
+
+            // Actualizar la URL del navegador con el processId guardado!
+            const currentUrlHash = window.location.hash;
+            if (currentUrlHash !== `#proceso=${idToSave}`) {
+                window.location.hash = `proceso=${idToSave}`;
+                console.log("URL actualizada con processId:", idToSave);
+            } else {
+                console.log("URL ya contiene el processId actual:", idToSave);
             }
 
             setErrorMessage('Proceso guardado con éxito en línea. Puedes compartir esta URL.');
@@ -954,17 +882,15 @@ function App() {
         }
     };
 
-    // Función para copiar la URL actual del proceso al portapapeles (para compartir)
     const handleShareButton = () => {
         if (!processId || !selectedFile) {
             setErrorMessage('Carga un PDF y guarda el proceso para obtener una URL compartible.');
             setTimeout(() => setErrorMessage(''), 4000);
             return;
         }
-        // Construir la URL completa que incluye el hash del processId
         const urlToCopy = `${window.location.origin}${window.location.pathname}#proceso=${processId}`;
 
-        navigator.clipboard.writeText(urlToCopy) // Usar Clipboard API para copiar texto
+        navigator.clipboard.writeText(urlToCopy)
             .then(() => {
                 setErrorMessage('URL del proceso copiada al portapapeles.');
                 setTimeout(() => setErrorMessage(''), 3000);
@@ -976,12 +902,10 @@ function App() {
             });
     };
 
-    // Función para abrir el modal de ayuda
     const handleOpenHelpModal = () => {
         setShowHelpModal(true);
     };
 
-    // Función para cerrar el modal de ayuda
     const handleCloseHelpModal = () => {
         setShowHelpModal(false);
     };
@@ -991,14 +915,10 @@ function App() {
         <div className="app-container">
             <header className="app-header">
                 <h1 className="app-title">Página de Firmas y Visor de PDFs</h1>
-                {/* Aquí puedes añadir información del usuario o del proceso si lo deseas */}
-                {/* {userId && <span className="user-id-display">ID de Usuario: {userId}</span>} */}
-                {/* {processId && <span className="process-id-display">ID de Proceso: {processId}</span>} */}
             </header>
 
             <main className="app-main-content">
                 <div className="top-control-panel">
-                    {/* Botón para seleccionar archivo PDF */}
                     <label htmlFor="pdf-upload" className="action-button select-file-button">
                         Seleccionar archivo
                     </label>
@@ -1006,11 +926,10 @@ function App() {
                         type="file"
                         id="pdf-upload"
                         accept=".pdf,application/pdf"
-                        style={{ display: 'none' }} // Ocultar el input nativo
+                        style={{ display: 'none' }}
                         onChange={handleFileChange}
                     />
 
-                    {/* Muestra el nombre del archivo seleccionado o un estado por defecto */}
                     {selectedFile ? (
                         <span className="file-status-text">
                             Archivo seleccionado: <strong>{selectedFile.name}</strong>
@@ -1021,37 +940,33 @@ function App() {
                         </span>
                     )}
 
-                    {/* Botón original "Añadir Firma" */}
                     <button
                         className="action-button primary-action"
                         onClick={handleAddSignatureClick}
-                        disabled={isAddSignatureButtonDisabled} // Deshabilitado si no hay archivo o proceso activo
+                        disabled={isAddSignatureButtonDisabled}
                     >
                         Añadir Firma ✍️
                     </button>
 
-                    {/* Nuevo botón "Añadir Firma" (solo emoji), visible después de la primera firma incrustada */}
                     {hasSignatureApplied && (
                         <button
                             className="action-button primary-action emoji-add-button"
                             onClick={handleAddSignatureClick}
                             disabled={isAddSignatureButtonDisabled}
-                            title="Añadir otra firma" // Tooltip para accesibilidad
+                            title="Añadir otra firma"
                         >
                             ➕
                         </button>
                     )}
 
-                    {/* Botón para descargar el PDF actual (Guardar PDF) */}
                     <button
                         className="action-button"
                         onClick={handleSavePdf}
-                        disabled={!selectedFile || isProcessActive} // Deshabilitado si no hay PDF o si un proceso está activo
+                        disabled={!selectedFile || isProcessActive}
                     >
                         Guardar 📁
                     </button>
 
-                    {/* Nuevo botón: Guardar Proceso (guarda el estado en Supabase) */}
                     <button
                         className="action-button save-process-button"
                         onClick={handleSaveProcess}
@@ -1061,7 +976,6 @@ function App() {
                         Guardar Proceso 💾
                     </button>
 
-                    {/* Botón para Compartir (copia la URL del proceso al portapapeles) */}
                     <button
                         className="action-button"
                         onClick={handleShareButton}
@@ -1071,16 +985,14 @@ function App() {
                         Compartir 📤
                     </button>
 
-                    {/* Botón para abrir el modal de ayuda */}
                     <button
                         className="action-button help-button"
                         onClick={handleOpenHelpModal}
-                        disabled={isProcessActive} // Deshabilitado si un proceso de firma está activo
+                        disabled={isProcessActive}
                     >
                         Cómo usar la página ❓
                     </button>
 
-                    {/* Controles de navegación de páginas (Anterior / Siguiente) */}
                     {numPages && (
                         <div className="pdf-top-navigation">
                             <button onClick={goToPrevPage} disabled={pageNumber <= 1 || isProcessActive}>⬅️ Anterior</button>
@@ -1090,43 +1002,42 @@ function App() {
                     )}
                 </div>
 
-                {/* Área para mostrar mensajes de error/éxito */}
                 {errorMessage && (
                     <p className="error-message">{errorMessage}</p>
                 )}
 
-                {/* Visor de PDF */}
                 {fileUrl && !errorMessage ? (
                     <div className="pdf-viewer-container">
                         <div
                             className="pdf-document-wrapper"
-                            onWheel={handleMouseWheelZoom} // Habilitar zoom con rueda del ratón
-                            ref={viewerRef} // Referencia para controlar scroll
-                            onMouseDown={onStartInteraction} // Iniciar arrastre del PDF (ratón)
-                            onTouchStart={onStartInteraction} // Iniciar arrastre del PDF (táctil)
+                            onWheel={handleMouseWheelZoom}
+                            ref={viewerRef}
+                            onMouseDown={(e) => onStartInteraction(e)}
+                            onTouchStart={(e) => onStartInteraction(e)}
                         >
                             <Document
-                                file={fileUrl} // La URL Blob del PDF
-                                onLoadSuccess={onDocumentLoadSuccess} // Callback al cargar el documento
-                                onLoadError={console.error} // Callback si hay error al cargar
-                                loading={<p style={{ color: '#8bbdff' }}>Cargando PDF...</p>} // Contenido mientras carga
+                                // La clave fuerza a React a re-renderizar el componente Document
+                                // cuando el fileUrl cambia, lo que es crucial para react-pdf.
+                                key={fileUrl} 
+                                file={fileUrl}
+                                onLoadSuccess={onDocumentLoadSuccess}
+                                onLoadError={console.error}
+                                loading={<p style={{ color: '#8bbdff' }}>Cargando PDF...</p>}
                             >
                                 <Page
-                                    pageNumber={pageNumber} // Página actual a mostrar
-                                    scale={scale} // Escala de visualización
-                                    renderTextLayer={true} // Habilitar selección de texto
-                                    renderAnnotationLayer={true} // Habilitar anotaciones si las hay
+                                    pageNumber={pageNumber}
+                                    scale={scale}
+                                    renderTextLayer={true}
+                                    renderAnnotationLayer={true}
                                     className="pdf-page"
-                                    width={600} // Ancho de renderizado de la página (react-pdf ajustará la altura)
+                                    width={600}
                                 />
                             </Document>
 
-                            {/* Indicador de Zoom */}
                             <div className={`zoom-indicator ${isDragging || initialPinchDistance ? 'visible' : ''}`}>
-                                Zoom: {(scale * 100).toFixed(0)}%
+                                Zoom: ${(scale * 100).toFixed(0)}%
                             </div>
 
-                            {/* RECUADRO 1: El recuadro de selección de firma (movible y redimensionable) */}
                             {showSignatureBox1 && (
                                 <div
                                     className={`signature-box-1 ${isDraggingBox ? 'is-dragging' : ''} ${isResizingBox ? 'is-resizing' : ''}`}
@@ -1136,28 +1047,26 @@ function App() {
                                         width: signatureBox1Size.width + 'px',
                                         height: signatureBox1Size.height + 'px',
                                     }}
-                                    onMouseDown={onSignatureBoxStart} // Iniciar arrastre del recuadro (ratón)
-                                    onTouchStart={onSignatureBoxStart} // Iniciar arrastre del recuadro (táctil)
+                                    onMouseDown={(e) => onSignatureBoxStart(e)}
+                                    onTouchStart={(e) => onSignatureBoxStart(e)}
                                 >
                                     <div className="signature-box-1-buttons">
                                         <button className="signature-box-1-button cancel-button" onClick={handleCancelSignatureBox1}>❌</button>
                                         <button className="signature-box-1-button confirm-button" onClick={handleConfirmSignatureBox1}>✅</button>
                                     </div>
-                                    {/* Handles de redimensionamiento */}
                                     <div
                                         className="signature-box-1-resize-handle bottom-right"
-                                        onMouseDown={(e) => onResizeHandleStart(e, 'br')} // Iniciar redimensionamiento (ratón)
-                                        onTouchStart={(e) => onResizeHandleStart(e, 'br')} // Iniciar redimensionamiento (táctil)
+                                        onMouseDown={(e) => onResizeHandleStart(e, 'br')}
+                                        onTouchStart={(e) => onResizeHandleStart(e, 'br')}
                                     ></div>
                                     <div
                                         className="signature-box-1-resize-handle bottom-left"
-                                        onMouseDown={(e) => onResizeHandleStart(e, 'bl')} // Iniciar redimensionamiento (ratón)
-                                        onTouchStart={(e) => onResizeHandleStart(e, 'bl')} // Iniciar redimensionamiento (táctil)
+                                        onMouseDown={(e) => onResizeHandleStart(e, 'bl')}
+                                        onTouchStart={(e) => onResizeHandleStart(e, 'bl')}
                                     ></div>
                                 </div>
                             )}
 
-                            {/* RECUADRO 2: Confirmación de área (estático, después de posicionar el Recuadro 1) */}
                             {showSignatureBox2 && (
                                 <div
                                     className="signature-box-2"
@@ -1181,14 +1090,12 @@ function App() {
                         </div>
                     </div>
                 ) : (
-                    // Mensaje o imagen cuando no hay PDF cargado o hay un error
                     <div className="no-pdf-placeholder">
                         {!errorMessage && <p>Sube un PDF para empezar a trabajar con él.</p>}
                     </div>
                 )}
             </main>
 
-            {/* MODAL DEL RECUADRO 3: RENDERIZADO FUERA DEL VISOR DEL PDF (modal de dibujo de firma) */}
             {showSignatureBox3 && (
                 <div className="modal-overlay">
                     <div
@@ -1208,7 +1115,7 @@ function App() {
                                 minWidth={1}
                                 maxWidth={2}
                                 backgroundColor='white'
-                                onBegin={() => setErrorMessage('')} // Limpiar errores al empezar a dibujar
+                                onBegin={() => setErrorMessage('')}
                             />
                         </div>
                         <div className="signature-box-3-buttons">
@@ -1220,7 +1127,6 @@ function App() {
                 </div>
             )}
 
-            {/* MODAL DE AYUDA (se superpone sobre todo) */}
             {showHelpModal && (
                 <div className="modal-overlay">
                     <div className="help-modal">

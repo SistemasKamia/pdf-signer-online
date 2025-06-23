@@ -186,7 +186,7 @@ body {
   width: 100%;
   display: flex;
   flex-wrap: wrap; /* Permite que los elementos se envuelvan a la siguiente línea */
-  justify-content: center; /* Centra los elementos */
+  justify-content: flex-start; /* Alineación por defecto a la izquierda */
   align-items: center;
   gap: 10px; /* Espacio entre botones */
   background-color: var(--card-bg-light);
@@ -202,10 +202,9 @@ body {
 .file-status-text {
   color: var(--text-medium);
   font-size: 0.85em;
-  margin: 0 8px;
+  margin: 0 8px; /* Mantén el margen lateral en escritorio */
   min-width: 120px;
   text-align: left;
-  /* Se ajustará en móvil para centrar */
 }
 .file-status-text.default-status {
     font-style: italic;
@@ -315,6 +314,8 @@ body {
   &::-webkit-scrollbar-track {
     background-color: rgba(0, 0, 0, 0.1);
   }
+  /* ¡CRUCIAL PARA ZOOM TÁCTIL! */
+  touch-action: none;
 }
 
 .pdf-document-wrapper:active {
@@ -796,25 +797,61 @@ body {
 
   /* Panel de control superior (botones principales) */
   .top-control-panel {
-    flex-direction: column; /* Botones apilados */
+    flex-direction: column; /* Apila los elementos por defecto */
     gap: 12px;
     padding: 15px;
+    justify-content: flex-start;
+    align-items: stretch; /* Estira los elementos para que ocupen todo el ancho */
   }
 
+  /* Reglas generales para botones y texto de estado en móvil */
   .action-button,
-  .select-file-button {
-    width: 100%; /* Ocupan todo el ancho */
-    min-width: unset; /* Elimina el mínimo para que se adapte */
+  .select-file-button,
+  .file-status-text {
+    width: 100%; /* Todos los botones y texto de estado ocupan el 100% de ancho */
+    flex-basis: auto; /* Ancho automático, pero forzado al 100% por width */
+    margin: 0; /* Asegura que no haya márgenes externos que rompan el layout */
     padding: 12px 15px; /* Más padding para facilitar el toque */
     font-size: 1em; /* Un poco más grande para legibilidad */
   }
 
   .file-status-text {
     text-align: center; /* Centra el texto de estado */
-    width: 100%;
-    margin-top: 8px;
-    font-size: 0.9em; /* Un poco más grande */
+    order: 2; /* Orden para que aparezca después del botón "Seleccionar archivo" */
+    margin-top: 10px; /* Espacio extra arriba */
+    margin-bottom: 10px; /* Espacio extra abajo */
   }
+
+  .select-file-button {
+    order: 1; /* El botón de seleccionar archivo siempre al principio */
+  }
+
+  .action-button.primary-action:first-of-type { /* El botón Añadir Firma original */
+    order: 3;
+  }
+  .emoji-add-button { /* El botón "+" para Añadir otra firma */
+    order: 4;
+    width: 100%; /* Fuerza el ancho completo para evitar problemas de alineación */
+    height: auto; /* Ajusta la altura automáticamente */
+    padding: 12px 15px; /* Mismo padding que otros botones */
+    font-size: 1em; /* Mismo tamaño de fuente que otros botones */
+  }
+  .action-button:not(.select-file-button):nth-of-type(3) { /* Botón Guardar */
+    order: 5;
+  }
+  .save-process-button { /* Botón Guardar Proceso */
+    order: 6;
+  }
+  .action-button:nth-of-type(5) { /* Botón Compartir */
+    order: 7;
+  }
+  .action-button.help-button { /* Botón Cómo usar la página */
+    order: 8;
+  }
+  .pdf-top-navigation {
+    order: 9; /* Controles de navegación de página al final */
+  }
+
 
   .error-message {
     padding: 12px;
@@ -858,43 +895,6 @@ body {
     right: 10px;
     font-size: 0.85em;
     padding: 6px 10px;
-  }
-
-  /* Botón de añadir firma con emoji en móviles */
-  .emoji-add-button {
-    width: 60px; /* Ancho fijo para que el emoji sea prominente */
-    height: 48px; /* Altura para que sea un cuadrado */
-    min-width: unset;
-    padding: 0; /* Elimina padding para centrar mejor el emoji */
-    font-size: 1.8em; /* Hace el emoji más grande */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-  .emoji-add-button span { /* Si el emoji está dentro de un span */
-    line-height: 1; /* Ajusta la altura de línea */
-  }
-
-
-  /* Modal de Ayuda en móviles */
-  .help-modal {
-    padding: 20px;
-    max-width: 95vw;
-    font-size: 0.9em;
-  }
-  .help-modal-title {
-    font-size: 1.6em;
-  }
-  .help-modal-subtitle {
-    font-size: 1.2em;
-  }
-  .help-modal-list,
-  .help-modal-buttons-list {
-    padding-left: 20px;
-  }
-  .help-modal-close-button {
-    font-size: 0.95em;
-    padding: 10px 15px;
   }
 
   /* Botones del modal de firma (Recuadro 3) en móviles */
@@ -946,5 +946,6 @@ body {
     width: 50px; /* Más pequeño para móviles muy pequeños */
     height: 40px;
     font-size: 1.5em;
+    padding: 0; /* Centra el emoji */
   }
 }

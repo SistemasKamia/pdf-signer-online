@@ -7,14 +7,15 @@
     "@supabase/supabase-js": "^2.50.0",
     "base64-arraybuffer": "^1.0.2",
     "firebase": "^11.9.1",
+    "gh-pages": "^6.1.1",
     "pdf-lib": "^1.17.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-pdf": "^8.0.0",
     "react-scripts": "5.0.1",
     "react-signature-canvas": "^1.0.1",
-    "web-vitals": "^5.0.3",
-    "gh-pages": "^6.1.1"
+    "uuid": "^11.1.0",
+    "web-vitals": "^5.0.3"
   },
   "scripts": {
     "start": "react-scripts start",
