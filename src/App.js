@@ -91,8 +91,7 @@ function App() {
 
 
     // EFECTO 2: Carga inicial de la aplicación y gestión del processId en URL
-    // ESTA ES LA VERSIÓN DEL useEffect QUE SÍ TE FUNCIONABA Y CARGABA PDFs correctamente
-    // Se han mantenido las últimas correcciones de UUID y dependencias.
+    // ESTA VERSIÓN ES LA MÁS ESTABLE QUE TE FUNCIONABA.
     useEffect(() => {
         if (!userId) return; // Esperar a que el userId esté disponible.
 
@@ -113,7 +112,7 @@ function App() {
                     if (!userId || userId === 'null' || userId === 'undefined' || userId === '') {
                         console.error("DEPURACIÓN 406/400: ¡ALERTA CRÍTICA! userId es inválido antes de la consulta SELECT.");
                     }
-                    if (!idFromUrl || !uuidValidate(idFromUrl)) {
+                    if (!idFromUrl || !uuidValidate(idFromUrl)) { // uuidValidate añadido
                         console.error("DEPURACIÓN 406/400: ¡ALERTA CRÍTICA! idFromUrl es inválido o no es UUID.");
                     }
 
