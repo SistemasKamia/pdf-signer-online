@@ -6,7 +6,7 @@ import SignatureCanvas from 'react-signature-canvas';
 import { PDFDocument } from 'pdf-lib';
 import { decode as arrayBufferDecode, encode as arrayBufferEncode } from 'base64-arraybuffer';
 
-import { v4 as uuidv4, validate as uuidValidate } from 'uuid'; // Importa validate también
+import { v4 as uuidv4, validate as uuidValidate } from 'uuid'; // Importamos validate también
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -33,7 +33,7 @@ function App() {
 
     const [fileUrl, setFileUrl] = useState(null);
     const [errorMessage, setErrorMessage] = useState('');
-    const [numPages, setNumPages] = useState(1);
+    const [numPages, setNumPages] = useState(null);
     const [pageNumber, setPageNumber] = useState(1);
     const [scale, setScale] = useState(1.0);
 
@@ -91,7 +91,7 @@ function App() {
 
 
     // EFECTO 2: Carga inicial de la aplicación y gestión del processId en URL
-    // ESTA VERSIÓN ES LA MÁS ESTABLE QUE TE FUNCIONABA.
+    // ESTA VERSIÓN ES LA MÁS ESTABLE Y CUIDA LA CARGA DEL PDF DESDE URL O LA GENERACIÓN DE UNO NUEVO.
     useEffect(() => {
         if (!userId) return; // Esperar a que el userId esté disponible.
 
@@ -104,18 +104,6 @@ function App() {
                 // Si hay un ID en la URL, intentar cargarlo.
                 setProcessId(idFromUrl); // Establecer el ID del estado
                 try {
-                    // DEPURACIÓN: Realizando consulta a Supabase para cargar:
-                    console.log("DEPURACIÓN 406/400: Antes de consulta Supabase:");
-                    console.log("DEPURACIÓN 406/400: idFromUrl (de URL):", idFromUrl, " (tipo:", typeof idFromUrl, ")");
-                    console.log("DEPURACIÓN 406/400: userId (para query):", userId, " (tipo:", typeof userId, ")");
-                    // Asegurarnos que userId o idFromUrl no sean valores inválidos
-                    if (!userId || userId === 'null' || userId === 'undefined' || userId === '') {
-                        console.error("DEPURACIÓN 406/400: ¡ALERTA CRÍTICA! userId es inválido antes de la consulta SELECT.");
-                    }
-                    if (!idFromUrl || !uuidValidate(idFromUrl)) { // uuidValidate añadido
-                        console.error("DEPURACIÓN 406/400: ¡ALERTA CRÍTICA! idFromUrl es inválido o no es UUID.");
-                    }
-
                     const { data, error } = await supabase
                         .from('process_states')
                         .select('state_data')
@@ -123,11 +111,8 @@ function App() {
                         .eq('user_id', userId)
                         .single();
 
-                    if (error) { // Captura y loguea cualquier error de Supabase
-                        console.error("DEPURACIÓN: Error COMPLETO de Supabase al cargar proceso:", JSON.stringify(error, null, 2)); // Imprime el objeto error completo
-                        if (error.code !== 'PGRST116') { // 'PGRST116' es el código para "no row found"
-                            throw error;
-                        }
+                    if (error && error.code !== 'PGRST116') { // 'PGRST116' es el código para "no row found"
+                        throw error;
                     }
 
                     if (data && data.state_data) {
@@ -151,7 +136,7 @@ function App() {
                         setShowSignatureBox1(parsedState.showSignatureBox1);
                         setSignatureBox1Pos(parsedState.signatureBox1Pos);
                         setSignatureBox1Size(parsedState.signatureBox1Size);
-                        setShowSignatureBox2(parsedState.showSignatureBox2); 
+                        setShowSignatureBox2(parsedState.showSignatureBox2);
                         setFinalSignaturePos(parsedState.finalSignaturePos);
                         setFinalSignatureSize(parsedState.finalSignatureSize);
                         setShowSignatureBox3(parsedState.showSignatureBox3);
@@ -180,7 +165,7 @@ function App() {
                     }
                 } catch (e) {
                     // Capturar errores durante la carga (problemas de red, datos corruptos, etc.)
-                    console.error('Error al cargar proceso desde URL (posiblemente ID corrupto o problema de red/Supabase):', JSON.stringify(e, null, 2)); // Log completo del error
+                    console.error('Error al cargar proceso desde URL (posiblemente ID corrupto o problema de red/Supabase):', e);
                     setErrorMessage('Error al cargar proceso. Se iniciará uno nuevo.');
                     setTimeout(() => setErrorMessage(''), 5000);
                     const newId = generateUniqueId(); // Generar un nuevo ID para el nuevo proceso
@@ -336,6 +321,7 @@ function App() {
         const file = event.target.files[0];
         setErrorMessage('');
         // Limpiar todos los estados relacionados con el PDF antes de cargar el nuevo.
+        // Esto es crucial para que el componente Document reaccione y no muestre el PDF anterior.
         setSelectedFile(null); 
         if (fileUrl) URL.revokeObjectURL(fileUrl);
         setFileUrl(null); 
@@ -610,7 +596,7 @@ function App() {
         window.addEventListener('mousemove', onMoveInteraction);
         window.addEventListener('mouseleave', onLeaveWindowGlobal);
 
-        window.addEventListener('touchend', onEndInteraction); 
+        window.addEventListener('touchend', onEndInteraction);
         window.addEventListener('touchmove', onMoveInteraction, { passive: false });
         window.addEventListener('touchcancel', onEndInteraction);
 
@@ -619,7 +605,7 @@ function App() {
             window.removeEventListener('mousemove', onMoveInteraction);
             window.removeEventListener('mouseleave', onLeaveWindowGlobal);
 
-            window.removeEventListener('touchend', onEndInteraction); 
+            window.removeEventListener('touchend', onEndInteraction);
             window.removeEventListener('touchmove', onMoveInteraction);
             window.removeEventListener('touchcancel', onEndInteraction);
         };
@@ -712,10 +698,7 @@ function App() {
 
     const handleConfirmSignature3 = async () => {
         if (sigCanvasRef.current && !sigCanvasRef.current.isEmpty()) {
-            // La calidad 1.0 es el valor máximo para toDataURL para PNG (no aplica compresión).
-            const signatureDataURL = sigCanvasRef.current.getTrimmedCanvas().toDataURL('image/png', 1.0); 
-            console.log("DEPURACIÓN FIRMA: Signature Data URL MIME Type:", signatureDataURL.split(';')[0]); // Debería ser "data:image/png"
-            console.log("DEPURACIÓN FIRMA: Signature Data URL start (first 50 chars):", signatureDataURL.substring(0, 50));
+            const signatureDataURL = sigCanvasRef.current.toDataURL('image/png');
 
             setShowSignatureBox3(false);
             sigCanvasRef.current.clear();
@@ -735,11 +718,9 @@ function App() {
                 return;
             }
 
-            let pdfDoc; // Declarar pdfDoc aquí para que esté disponible en todo el bloque try/catch
-
             try {
-                pdfDoc = await PDFDocument.load(pdfArrayBuffer); // Asignar aquí
-                const signatureImage = await pdfDoc.embedPng(signatureDataURL); // Usamos embedPng explícitamente
+                const pdfDoc = await PDFDocument.load(pdfArrayBuffer);
+                const signatureImage = await pdfDoc.embedPng(signatureDataURL);
 
                 const pages = pdfDoc.getPages();
                 if (pageNumber < 1 || pageNumber > pages.length) {
@@ -1000,7 +981,7 @@ function App() {
                         className="action-button save-process-button"
                         onClick={handleSaveProcess}
                         disabled={!selectedFile || showHelpModal || !processId || !userId}
-                        title="Guarda el estado actual de tu trabajo (incluyendo el PDF y el recuadro de firma si está activo) en línea, asociándolo a esta URL única para lo que puedas continuar más tarde o compartirla."
+                        title="Guarda el estado actual de tu trabajo (incluyendo el PDF y el recuadro de firma si está activo) en línea. Se asocia a esta URL única para que puedas continuar más tarde o compartirla."
                     >
                         Guardar Proceso 💾
                     </button>
@@ -1045,6 +1026,8 @@ function App() {
                             onTouchStart={(e) => onStartInteraction(e)}
                         >
                             <Document
+                                // La clave fuerza a React a re-renderizar el componente Document
+                                // cuando el fileUrl cambia, lo que es crucial para react-pdf.
                                 key={fileUrl} 
                                 file={fileUrl}
                                 onLoadSuccess={onDocumentLoadSuccess}
@@ -1137,15 +1120,11 @@ function App() {
                                     className: 'signature-canvas-modal',
                                     width: sigCanvasWidth,
                                     height: sigCanvasHeight,
-                                    // Propiedad para fondo transparente
-                                    backgroundColor: 'transparent'
                                 }}
                                 penColor='black'
                                 minWidth={1}
                                 maxWidth={2}
-                                dotSize={0.5} // Mejora la continuidad del trazo
-                                velocityFilterWeight={0.9} // Suaviza el trazo
-                                minDistance={0.1} // Asegura más puntos en el trazo para nitidez
+                                backgroundColor='white'
                                 onBegin={() => setErrorMessage('')}
                             />
                         </div>
@@ -1186,7 +1165,7 @@ function App() {
                             <li>**✅ (Botón Confirmar Recuadro 1):** Confirma la posición y tamaño del área de firma.</li>
                             <li>**🖋️ (Botón Confirmar Recuadro 2):** Abre el lienzo para dibujar tu firma.</li>
                             <li>**↩️ Limpiar (Botón Modal Firma):** Borra el dibujo actual en el lienzo de firma.</li>
-                            <li>**✅ Firmar (Boton Modal Firma):** Incrusta tu firma dibujada en el PDF.</li>
+                            <li>**✅ Firmar (Botón Modal Firma):** Incrusta tu firma dibujada en el PDF.</li>
                         </ul>
                         <button className="help-modal-close-button action-button" onClick={handleCloseHelpModal}>Cerrar</button>
                     </div>
@@ -1195,5 +1174,5 @@ function App() {
         </div>
     );
 }
-
+ 
 export default App;
