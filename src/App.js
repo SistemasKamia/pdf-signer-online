@@ -6,7 +6,7 @@ import SignatureCanvas from 'react-signature-canvas';
 import { PDFDocument } from 'pdf-lib';
 import { decode as arrayBufferDecode, encode as arrayBufferEncode } from 'base64-arraybuffer';
 
-import { v4 as uuidv4, validate as uuidValidate } from 'uuid';
+import { v4 as uuidv4, validate as uuidValidate } from 'uuid'; // Importa validate también
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -91,6 +91,8 @@ function App() {
 
 
     // EFECTO 2: Carga inicial de la aplicación y gestión del processId en URL
+    // ESTA ES LA VERSIÓN DEL useEffect QUE SÍ TE FUNCIONABA Y CARGABA PDFs correctamente
+    // Se han mantenido las últimas correcciones de UUID y dependencias.
     useEffect(() => {
         if (!userId) return; // Esperar a que el userId esté disponible.
 
@@ -99,39 +101,31 @@ function App() {
             const params = new URLSearchParams(hash.substring(1));
             const idFromUrl = params.get('proceso');
 
-            // Determinar el ID a usar para la carga. Si hay uno en la URL, se usa. Si no, se genera uno nuevo.
-            let idToUse = idFromUrl;
-            if (!idToUse || !uuidValidate(idToUse)) {
-                idToUse = generateUniqueId();
-                window.location.hash = `proceso=${idToUse}`; // Actualiza la URL
-            }
-            setProcessId(idToUse); // Actualiza el estado del processId
-
-            // *** DEPURACIÓN CRÍTICA AQUÍ PARA EL ERROR 400 ***
-            console.log("DEPURACIÓN 400: Antes de consulta Supabase:");
-            console.log("DEPURACIÓN 400: idToUse (para query):", idToUse, " (tipo:", typeof idToUse, ")");
-            console.log("DEPURACIÓN 400: userId (para query):", userId, " (tipo:", typeof userId, ")");
-            // Asegurarnos que userId no sea 'null' string o similar si viene de localStorage
-            if (userId === null || userId === 'null' || userId === undefined || userId === '') {
-                console.error("DEPURACIÓN 400: ¡ALERTA! userId es inválido antes de la consulta.");
-            }
-            if (idToUse === null || idToUse === 'null' || idToUse === undefined || idToUse === '') {
-                console.error("DEPURACIÓN 400: ¡ALERTA! idToUse es inválido antes de la consulta.");
-            }
-            // ************************************************
-
-            // Solo intentar cargar el proceso desde Supabase si el ID proviene de la URL y es válido
-            if (idFromUrl && uuidValidate(idFromUrl)) { 
+            if (idFromUrl) {
+                // Si hay un ID en la URL, intentar cargarlo.
+                setProcessId(idFromUrl); // Establecer el ID del estado
                 try {
+                    // DEPURACIÓN: Realizando consulta a Supabase para cargar:
+                    console.log("DEPURACIÓN 406/400: Antes de consulta Supabase:");
+                    console.log("DEPURACIÓN 406/400: idFromUrl (de URL):", idFromUrl, " (tipo:", typeof idFromUrl, ")");
+                    console.log("DEPURACIÓN 406/400: userId (para query):", userId, " (tipo:", typeof userId, ")");
+                    // Asegurarnos que userId o idFromUrl no sean valores inválidos
+                    if (!userId || userId === 'null' || userId === 'undefined' || userId === '') {
+                        console.error("DEPURACIÓN 406/400: ¡ALERTA CRÍTICA! userId es inválido antes de la consulta SELECT.");
+                    }
+                    if (!idFromUrl || !uuidValidate(idFromUrl)) {
+                        console.error("DEPURACIÓN 406/400: ¡ALERTA CRÍTICA! idFromUrl es inválido o no es UUID.");
+                    }
+
                     const { data, error } = await supabase
                         .from('process_states')
                         .select('state_data')
-                        .eq('id', idToUse)
-                        .eq('user_id', userId) // <-- Verificar que userId siempre sea un valor válido aquí
+                        .eq('id', idFromUrl)
+                        .eq('user_id', userId)
                         .single();
 
                     if (error) { // Captura y loguea cualquier error de Supabase
-                        console.error("DEPURACIÓN: Error COMPLETO de Supabase al cargar proceso:", error);
+                        console.error("DEPURACIÓN: Error COMPLETO de Supabase al cargar proceso:", JSON.stringify(error, null, 2)); // Imprime el objeto error completo
                         if (error.code !== 'PGRST116') { // 'PGRST116' es el código para "no row found"
                             throw error;
                         }
@@ -166,8 +160,12 @@ function App() {
                         setErrorMessage('Proceso cargado desde URL exitosamente.');
                         setTimeout(() => setErrorMessage(''), 3000);
                     } else {
-                        // Si el ID en la URL no llevó a un proceso válido, limpiar estados de PDF (por si había uno viejo) y notificar.
+                        // Si el ID estaba en la URL pero no se encontró un estado guardado en Supabase,
+                        // significa que el enlace puede ser viejo o inválido, o no pertenece a este usuario.
                         console.warn('ID en URL pero no hay proceso guardado en Supabase para este ID o no es tuyo. Iniciando un nuevo proceso.');
+                        const newId = generateUniqueId(); // Generar un nuevo ID único
+                        setProcessId(newId); // Establecer el nuevo ID
+                        window.location.hash = `proceso=${newId}`; // Actualizar la URL con el nuevo ID
                         setErrorMessage('Proceso no encontrado o no autorizado. Iniciando uno nuevo.');
                         setTimeout(() => setErrorMessage(''), 5000);
                         // Limpiar estados del PDF para asegurar que el placeholder se ve.
@@ -182,10 +180,14 @@ function App() {
                         setHasSignatureApplied(false);
                     }
                 } catch (e) {
-                    console.error('Error al cargar proceso desde URL (posiblemente ID corrupto o problema de red/Supabase):', e);
+                    // Capturar errores durante la carga (problemas de red, datos corruptos, etc.)
+                    console.error('Error al cargar proceso desde URL (posiblemente ID corrupto o problema de red/Supabase):', JSON.stringify(e, null, 2)); // Log completo del error
                     setErrorMessage('Error al cargar proceso. Se iniciará uno nuevo.');
                     setTimeout(() => setErrorMessage(''), 5000);
-                    // Limpiar estados del PDF en caso de error de carga.
+                    const newId = generateUniqueId(); // Generar un nuevo ID para el nuevo proceso
+                    setProcessId(newId);
+                    window.location.hash = `proceso=${newId}`; // Actualizar la URL
+                    // Limpiar estados del PDF para asegurar que el placeholder se ve.
                     setSelectedFile(null);
                     setPdfOriginalBuffer(null);
                     if (fileUrl) URL.revokeObjectURL(fileUrl);
@@ -197,8 +199,11 @@ function App() {
                     setHasSignatureApplied(false);
                 }
             } else {
-                // Si no hay ID en la URL, ya se generó uno nuevo. Solo nos aseguramos de limpiar si es una carga fresca.
-                console.log("No hay ID en URL. Iniciando un proceso fresco. processId:", idToUse);
+                // Si no hay ningún ID en la URL al inicio, generar uno nuevo y establecerlo.
+                const newId = generateUniqueId();
+                setProcessId(newId);
+                window.location.hash = `proceso=${newId}`; // Esto actualizará la URL en el navegador
+                // Limpiar estados del PDF para asegurar que el placeholder se ve.
                 setSelectedFile(null);
                 setPdfOriginalBuffer(null);
                 if (fileUrl) URL.revokeObjectURL(fileUrl);
@@ -213,12 +218,13 @@ function App() {
 
         loadInitialProcess();
 
+        // Limpieza de URL Blob al desmontar o al cambiar las dependencias.
         return () => {
             if (fileUrl) {
                 URL.revokeObjectURL(fileUrl);
             }
         };
-    }, [userId, fileUrl]);
+    }, [userId, fileUrl]); // Dependencias: userId para iniciar, fileUrl para limpieza de blobs.
 
 
     // Efecto para el posicionamiento inicial del recuadro de firma (Recuadro 1)
@@ -605,7 +611,7 @@ function App() {
         window.addEventListener('mousemove', onMoveInteraction);
         window.addEventListener('mouseleave', onLeaveWindowGlobal);
 
-        window.addEventListener('touchend', onEndInteraction); // <-- ¡CORREGIDO! Antes era onEndEventListener
+        window.addEventListener('touchend', onEndInteraction); 
         window.addEventListener('touchmove', onMoveInteraction, { passive: false });
         window.addEventListener('touchcancel', onEndInteraction);
 
@@ -614,7 +620,7 @@ function App() {
             window.removeEventListener('mousemove', onMoveInteraction);
             window.removeEventListener('mouseleave', onLeaveWindowGlobal);
 
-            window.removeEventListener('touchend', onEndInteraction); // <-- ¡CORREGIDO! Antes era onEndEventListener
+            window.removeEventListener('touchend', onEndInteraction); 
             window.removeEventListener('touchmove', onMoveInteraction);
             window.removeEventListener('touchcancel', onEndInteraction);
         };
@@ -1181,7 +1187,7 @@ function App() {
                             <li>**✅ (Botón Confirmar Recuadro 1):** Confirma la posición y tamaño del área de firma.</li>
                             <li>**🖋️ (Botón Confirmar Recuadro 2):** Abre el lienzo para dibujar tu firma.</li>
                             <li>**↩️ Limpiar (Botón Modal Firma):** Borra el dibujo actual en el lienzo de firma.</li>
-                            <li>**✅ Firmar (Botón Modal Firma):** Incrusta tu firma dibujada en el PDF.</li>
+                            <li>**✅ Firmar (Boton Modal Firma):** Incrusta tu firma dibujada en el PDF.</li>
                         </ul>
                         <button className="help-modal-close-button action-button" onClick={handleCloseHelpModal}>Cerrar</button>
                     </div>
