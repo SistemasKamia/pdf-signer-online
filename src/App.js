@@ -33,7 +33,7 @@ function App() {
 
     const [fileUrl, setFileUrl] = useState(null);
     const [errorMessage, setErrorMessage] = useState('');
-    const [numPages, setNumPages] = useState(null);
+    const [numPages, setNumPages] = useState(1);
     const [pageNumber, setPageNumber] = useState(1);
     const [scale, setScale] = useState(1.0);
 
@@ -99,25 +99,39 @@ function App() {
             const params = new URLSearchParams(hash.substring(1));
             const idFromUrl = params.get('proceso');
 
-            if (idFromUrl) {
-                // Si hay un ID en la URL, intentar cargarlo.
-                setProcessId(idFromUrl); // Establecer el ID del estado
-                try {
-                    // *** DEPURACIÓN CRÍTICA AQUÍ ***
-                    console.log("DEPURACIÓN: Realizando consulta a Supabase para cargar:");
-                    console.log("DEPURACIÓN: idFromUrl:", idFromUrl, " (tipo:", typeof idFromUrl, ")");
-                    console.log("DEPURACIÓN: userId:", userId, " (tipo:", typeof userId, ")");
-                    // ********************************
+            // Determinar el ID a usar para la carga. Si hay uno en la URL, se usa. Si no, se genera uno nuevo.
+            let idToUse = idFromUrl;
+            if (!idToUse || !uuidValidate(idToUse)) {
+                idToUse = generateUniqueId();
+                window.location.hash = `proceso=${idToUse}`; // Actualiza la URL
+            }
+            setProcessId(idToUse); // Actualiza el estado del processId
 
+            // *** DEPURACIÓN CRÍTICA AQUÍ PARA EL ERROR 400 ***
+            console.log("DEPURACIÓN 400: Antes de consulta Supabase:");
+            console.log("DEPURACIÓN 400: idToUse (para query):", idToUse, " (tipo:", typeof idToUse, ")");
+            console.log("DEPURACIÓN 400: userId (para query):", userId, " (tipo:", typeof userId, ")");
+            // Asegurarnos que userId no sea 'null' string o similar si viene de localStorage
+            if (userId === null || userId === 'null' || userId === undefined || userId === '') {
+                console.error("DEPURACIÓN 400: ¡ALERTA! userId es inválido antes de la consulta.");
+            }
+            if (idToUse === null || idToUse === 'null' || idToUse === undefined || idToUse === '') {
+                console.error("DEPURACIÓN 400: ¡ALERTA! idToUse es inválido antes de la consulta.");
+            }
+            // ************************************************
+
+            // Solo intentar cargar el proceso desde Supabase si el ID proviene de la URL y es válido
+            if (idFromUrl && uuidValidate(idFromUrl)) { 
+                try {
                     const { data, error } = await supabase
                         .from('process_states')
                         .select('state_data')
-                        .eq('id', idFromUrl)
-                        .eq('user_id', userId)
+                        .eq('id', idToUse)
+                        .eq('user_id', userId) // <-- Verificar que userId siempre sea un valor válido aquí
                         .single();
 
                     if (error) { // Captura y loguea cualquier error de Supabase
-                        console.error("DEPURACIÓN: Error de Supabase al cargar proceso:", error);
+                        console.error("DEPURACIÓN: Error COMPLETO de Supabase al cargar proceso:", error);
                         if (error.code !== 'PGRST116') { // 'PGRST116' es el código para "no row found"
                             throw error;
                         }
@@ -152,12 +166,8 @@ function App() {
                         setErrorMessage('Proceso cargado desde URL exitosamente.');
                         setTimeout(() => setErrorMessage(''), 3000);
                     } else {
-                        // Si el ID estaba en la URL pero no se encontró un estado guardado en Supabase,
-                        // significa que el enlace puede ser viejo o inválido, o no pertenece a este usuario.
+                        // Si el ID en la URL no llevó a un proceso válido, limpiar estados de PDF (por si había uno viejo) y notificar.
                         console.warn('ID en URL pero no hay proceso guardado en Supabase para este ID o no es tuyo. Iniciando un nuevo proceso.');
-                        const newId = generateUniqueId(); // Generar un nuevo ID único
-                        setProcessId(newId); // Establecer el nuevo ID
-                        window.location.hash = `proceso=${newId}`; // Actualizar la URL con el nuevo ID
                         setErrorMessage('Proceso no encontrado o no autorizado. Iniciando uno nuevo.');
                         setTimeout(() => setErrorMessage(''), 5000);
                         // Limpiar estados del PDF para asegurar que el placeholder se ve.
@@ -172,14 +182,10 @@ function App() {
                         setHasSignatureApplied(false);
                     }
                 } catch (e) {
-                    // Capturar errores durante la carga (problemas de red, datos corruptos, etc.)
                     console.error('Error al cargar proceso desde URL (posiblemente ID corrupto o problema de red/Supabase):', e);
                     setErrorMessage('Error al cargar proceso. Se iniciará uno nuevo.');
                     setTimeout(() => setErrorMessage(''), 5000);
-                    const newId = generateUniqueId(); // Generar un nuevo ID para el nuevo proceso
-                    setProcessId(newId);
-                    window.location.hash = `proceso=${newId}`; // Actualizar la URL
-                    // Limpiar estados del PDF para asegurar que el placeholder se ve.
+                    // Limpiar estados del PDF en caso de error de carga.
                     setSelectedFile(null);
                     setPdfOriginalBuffer(null);
                     if (fileUrl) URL.revokeObjectURL(fileUrl);
@@ -191,11 +197,8 @@ function App() {
                     setHasSignatureApplied(false);
                 }
             } else {
-                // Si no hay ningún ID en la URL al inicio, generar uno nuevo y establecerlo.
-                const newId = generateUniqueId();
-                setProcessId(newId);
-                window.location.hash = `proceso=${newId}`; // Esto actualizará la URL en el navegador
-                // Limpiar estados del PDF para asegurar que el placeholder se ve.
+                // Si no hay ID en la URL, ya se generó uno nuevo. Solo nos aseguramos de limpiar si es una carga fresca.
+                console.log("No hay ID en URL. Iniciando un proceso fresco. processId:", idToUse);
                 setSelectedFile(null);
                 setPdfOriginalBuffer(null);
                 if (fileUrl) URL.revokeObjectURL(fileUrl);
@@ -210,13 +213,12 @@ function App() {
 
         loadInitialProcess();
 
-        // Limpieza de URL Blob al desmontar o al cambiar las dependencias.
         return () => {
             if (fileUrl) {
                 URL.revokeObjectURL(fileUrl);
             }
         };
-    }, [userId, fileUrl]); // Dependencias: userId para iniciar, fileUrl para limpieza de blobs.
+    }, [userId, fileUrl]);
 
 
     // Efecto para el posicionamiento inicial del recuadro de firma (Recuadro 1)
