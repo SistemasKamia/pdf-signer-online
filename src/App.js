@@ -91,8 +91,7 @@ function App() {
 
 
     // EFECTO 2: Carga inicial de la aplicación y gestión del processId en URL
-    // Mantiene el PDF si no se encuentra un proceso guardado en Supabase,
-    // permitiendo cargar localmente y luego guardar.
+    // *** MODIFICACIÓN CLAVE: NO FILTRA POR USER_ID AL CARGAR UN PROCESO ***
     useEffect(() => {
         if (!userId) return; // Esperar a que el userId esté disponible.
 
@@ -108,7 +107,7 @@ function App() {
                         .from('process_states')
                         .select('state_data')
                         .eq('id', idFromUrl)
-                        .eq('user_id', userId)
+                        // .eq('user_id', userId) // <<< ESTA LÍNEA HA SIDO ELIMINADA para permitir acceso público
                         .single();
 
                     if (error && error.code !== 'PGRST116') { // 'PGRST116' es el código para "no row found"
@@ -142,14 +141,13 @@ function App() {
                         setErrorMessage('Proceso cargado desde URL exitosamente.');
                         setTimeout(() => setErrorMessage(''), 3000);
                     } else {
-                        // ***** MODIFICACIÓN CLAVE AQUÍ PARA NO BORRAR PDF LOCAL *****
                         // Si el ID de la URL no se encuentra en Supabase, NO LIMPIAR el PDF cargado localmente.
                         // Solo actualiza el processId de la URL a uno nuevo para indicar que es un nuevo proceso.
-                        console.warn('ID en URL pero no hay proceso guardado en Supabase para este ID o no es tuyo. Generando nuevo processId para esta sesión.');
+                        console.warn('ID en URL pero no hay proceso guardado en Supabase. Generando nuevo processId para esta sesión.');
                         const newId = generateUniqueId();
                         setProcessId(newId);
                         window.location.hash = `proceso=${newId}`; // Actualiza la URL
-                        setErrorMessage('Proceso anterior no encontrado o no autorizado. Puedes subir un nuevo PDF.');
+                        setErrorMessage('Proceso anterior no encontrado. Puedes subir un nuevo PDF.');
                         setTimeout(() => setErrorMessage(''), 5000);
                         
                         // Solo limpiar estados de firma y dejar el PDF visible si ya había uno cargado
@@ -157,14 +155,10 @@ function App() {
                         setShowSignatureBox2(false);
                         setShowSignatureBox3(false);
                         setHasSignatureApplied(false);
-                        setSignatureBox1Pos({ x: 0, y: 0 }); // Restablecer la posición del recuadro de firma 1
+                        setSignatureBox1Pos({ x: 0, y: 0 }); 
                         setSignatureBox1Size({ width: 200, height: 100 });
-                        setFinalSignaturePos({ x: 0, y: 0 }); // Restablecer la posición de la firma final
+                        setFinalSignaturePos({ x: 0, y: 0 });
                         setFinalSignatureSize({ width: 0, height: 0 });
-
-                        // IMPORTANTE: NO TOCAR selectedFile, fileUrl, numPages, pageNumber, scale,
-                        // pdfDocProxyRef, pdfOriginalBuffer. Esto permite que el PDF ya cargado localmente
-                        // siga siendo visible si el usuario recargó la página sin guardar el proceso.
                     }
                 } catch (e) {
                     console.error('Error al cargar proceso desde URL:', e);
@@ -190,7 +184,6 @@ function App() {
                 const newId = generateUniqueId();
                 setProcessId(newId);
                 window.location.hash = `proceso=${newId}`;
-                // Los estados iniciales de PDF ya son `null`, así que no se necesita limpieza aquí.
             }
         };
 
@@ -201,7 +194,7 @@ function App() {
                 URL.revokeObjectURL(fileUrl);
             }
         };
-    }, [userId]); // Dependencias: userId para iniciar. Removimos fileUrl para evitar re-ejecuciones innecesarias.
+    }, [userId]);
 
 
     // handleFileChange: Carga el PDF localmente y genera un nuevo processId en la URL
@@ -1123,7 +1116,7 @@ function App() {
                                 penColor='black'
                                 minWidth={1}
                                 maxWidth={2}
-                                backgroundColor='rgba(0,0,0,0)' // <<< CAMBIO AQUÍ: Fondo transparente
+                                backgroundColor='rgba(0,0,0,0)' // Fondo transparente para la firma
                                 onBegin={() => setErrorMessage('')}
                             />
                         </div>
