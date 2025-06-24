@@ -91,7 +91,8 @@ function App() {
 
 
     // EFECTO 2: Carga inicial de la aplicación y gestión del processId en URL
-    // *** MODIFICACIÓN CLAVE: NO FILTRA POR USER_ID AL CARGAR UN PROCESO ***
+    // Mantiene el PDF si no se encuentra un proceso guardado en Supabase,
+    // permitiendo cargar localmente y luego guardar.
     useEffect(() => {
         if (!userId) return; // Esperar a que el userId esté disponible.
 
@@ -107,7 +108,7 @@ function App() {
                         .from('process_states')
                         .select('state_data')
                         .eq('id', idFromUrl)
-                        // .eq('user_id', userId) // <<< ESTA LÍNEA HA SIDO ELIMINADA para permitir acceso público
+                        // .eq('user_id', userId) // <<< Esta línea ha sido eliminada para permitir acceso público
                         .single();
 
                     if (error && error.code !== 'PGRST116') { // 'PGRST116' es el código para "no row found"
@@ -157,7 +158,7 @@ function App() {
                         setHasSignatureApplied(false);
                         setSignatureBox1Pos({ x: 0, y: 0 }); 
                         setSignatureBox1Size({ width: 200, height: 100 });
-                        setFinalSignaturePos({ x: 0, y: 0 });
+                        setFinalSignaturePos({ x: 0, y: 0 }); 
                         setFinalSignatureSize({ width: 0, height: 0 });
                     }
                 } catch (e) {
@@ -324,17 +325,28 @@ function App() {
                 const measuredWidth = modalCanvasDrawingAreaRef.current.clientWidth;
                 const measuredHeight = modalCanvasDrawingAreaRef.current.clientHeight;
 
+                // ***** MODIFICACIÓN CLAVE AQUÍ: Factor de resolución para la firma *****
+                const resolutionFactor = 2; // Puedes probar con 2, 3, o 4 para mayor nitidez.
+                const highResWidth = measuredWidth * resolutionFactor;
+                const highResHeight = measuredHeight * resolutionFactor;
+                // **********************************************************************
+
                 if (measuredWidth > 0 && measuredHeight > 0) {
-                    setSigCanvasWidth(measuredWidth);
-                    setSigCanvasHeight(measuredHeight);
-                    console.log("Canvas de firma medido:", { width: measuredWidth, height: measuredHeight });
+                    setSigCanvasWidth(highResWidth);   // Usar dimensiones de alta resolución para el canvas
+                    setSigCanvasHeight(highResHeight); // Usar dimensiones de alta resolución para el canvas
+                    console.log("Canvas de firma medido (lógico):", { width: highResWidth, height: highResHeight });
+                    console.log("Canvas de firma visible (CSS):", { width: measuredWidth, height: measuredHeight });
 
                     if (sigCanvasRef.current) {
                         const canvas = sigCanvasRef.current.canvas;
                         if (canvas) {
-                            if (canvas.width !== measuredWidth || canvas.height !== measuredHeight) {
-                                canvas.width = measuredWidth;
-                                canvas.height = measuredHeight;
+                            if (canvas.width !== highResWidth || canvas.height !== highResHeight) {
+                                canvas.width = highResWidth;   // Establecer el tamaño real del canvas
+                                canvas.height = highResHeight; // Establecer el tamaño real del canvas
+                                // Aplicar un escalado al contexto del canvas para que el grosor de la pluma sea el mismo
+                                // pero en la nueva resolución.
+                                const ctx = canvas.getContext('2d');
+                                ctx.scale(resolutionFactor, resolutionFactor);
                             }
                             sigCanvasRef.current.clear();
                             sigCanvasRef.current.on();
