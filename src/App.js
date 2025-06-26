@@ -326,14 +326,15 @@ function App() {
                 const measuredHeight = modalCanvasDrawingAreaRef.current.clientHeight;
 
                 // ***** MODIFICACIÓN CLAVE AQUÍ: Factor de resolución para la firma *****
-                const resolutionFactor = 2; // Puedes probar con 2, 3, o 4 para mayor nitidez.
+                // Se cambió de 2 a 3 para mayor nitidez. Puedes probar con 4 si es necesario.
+                const resolutionFactor = 3; 
                 const highResWidth = measuredWidth * resolutionFactor;
                 const highResHeight = measuredHeight * resolutionFactor;
                 // **********************************************************************
 
                 if (measuredWidth > 0 && measuredHeight > 0) {
-                    setSigCanvasWidth(highResWidth);   // Usar dimensiones de alta resolución para el canvas
-                    setSigCanvasHeight(highResHeight); // Usar dimensiones de alta resolución para el canvas
+                    setSigCanvasWidth(highResWidth); 
+                    setSigCanvasHeight(highResHeight);
                     console.log("Canvas de firma medido (lógico):", { width: highResWidth, height: highResHeight });
                     console.log("Canvas de firma visible (CSS):", { width: measuredWidth, height: measuredHeight });
 
@@ -341,10 +342,8 @@ function App() {
                         const canvas = sigCanvasRef.current.canvas;
                         if (canvas) {
                             if (canvas.width !== highResWidth || canvas.height !== highResHeight) {
-                                canvas.width = highResWidth;   // Establecer el tamaño real del canvas
-                                canvas.height = highResHeight; // Establecer el tamaño real del canvas
-                                // Aplicar un escalado al contexto del canvas para que el grosor de la pluma sea el mismo
-                                // pero en la nueva resolución.
+                                canvas.width = highResWidth; 
+                                canvas.height = highResHeight;
                                 const ctx = canvas.getContext('2d');
                                 ctx.scale(resolutionFactor, resolutionFactor);
                             }
@@ -1126,9 +1125,9 @@ function App() {
                                     height: sigCanvasHeight,
                                 }}
                                 penColor='black'
-                                minWidth={1}
-                                maxWidth={2}
-                                backgroundColor='rgba(0,0,0,0)' // Fondo transparente para la firma
+                                minWidth={1} // Se mantiene en 1
+                                maxWidth={2} // Se mantiene en 2
+                                backgroundColor='rgba(0,0,0,0)'
                                 onBegin={() => setErrorMessage('')}
                             />
                         </div>
