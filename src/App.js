@@ -50,7 +50,9 @@ function App() {
 
     const [showSignatureBox1, setShowSignatureBox1] = useState(false);
     const [signatureBox1Pos, setSignatureBox1Pos] = useState({ x: 0, y: 0 });
-    const [signatureBox1Size, setSignatureBox1Size] = useState({ width: 200, height: 100 });
+    // >>> MODIFICACIÓN: AUMENTANDO EL TAMAÑO INICIAL DEL RECUADRO DE FIRMA <<<
+    const [signatureBox1Size, setSignatureBox1Size] = useState({ width: 300, height: 150 });
+    // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
     const [isDraggingBox, setIsDraggingBox] = useState(false);
     const [boxDragOffsetX, setBoxDragOffsetX] = useState(0);
@@ -120,12 +122,12 @@ function App() {
                         const parsedState = data.state_data;
 
                         const buffer = arrayBufferDecode(parsedState.pdfOriginalBuffer);
-                        setPdfOriginalBuffer(arrayBufferEncode(buffer)); 
+                        setPdfOriginalBuffer(arrayBufferEncode(buffer));
                         const newFileBlob = new Blob([buffer], { type: 'application/pdf' });
-                        
+
                         if (fileUrl) URL.revokeObjectURL(fileUrl);
-                        setFileUrl(URL.createObjectURL(newFileBlob)); 
-                        setSelectedFile(newFileBlob); 
+                        setFileUrl(URL.createObjectURL(newFileBlob));
+                        setSelectedFile(newFileBlob);
 
                         setNumPages(parsedState.numPages);
                         setPageNumber(parsedState.pageNumber);
@@ -150,15 +152,15 @@ function App() {
                         window.location.hash = `proceso=${newId}`; // Actualiza la URL
                         setErrorMessage('Proceso anterior no encontrado. Puedes subir un nuevo PDF.');
                         setTimeout(() => setErrorMessage(''), 5000);
-                        
+
                         // Solo limpiar estados de firma y dejar el PDF visible si ya había uno cargado
                         setShowSignatureBox1(false);
                         setShowSignatureBox2(false);
                         setShowSignatureBox3(false);
                         setHasSignatureApplied(false);
-                        setSignatureBox1Pos({ x: 0, y: 0 }); 
-                        setSignatureBox1Size({ width: 200, height: 100 });
-                        setFinalSignaturePos({ x: 0, y: 0 }); 
+                        setSignatureBox1Pos({ x: 0, y: 0 });
+                        setSignatureBox1Size({ width: 300, height: 150 }); // Se mantiene el tamaño inicial más grande aquí
+                        setFinalSignaturePos({ x: 0, y: 0 });
                         setFinalSignatureSize({ width: 0, height: 0 });
                     }
                 } catch (e) {
@@ -174,8 +176,8 @@ function App() {
                     setShowSignatureBox2(false);
                     setShowSignatureBox3(false);
                     setHasSignatureApplied(false);
-                    setSignatureBox1Pos({ x: 0, y: 0 }); 
-                    setSignatureBox1Size({ width: 200, height: 100 });
+                    setSignatureBox1Pos({ x: 0, y: 0 });
+                    setSignatureBox1Size({ width: 300, height: 150 }); // Se mantiene el tamaño inicial más grande aquí
                     setFinalSignaturePos({ x: 0, y: 0 });
                     setFinalSignatureSize({ width: 0, height: 0 });
                 }
@@ -204,9 +206,9 @@ function App() {
         const file = event.target.files[0];
         setErrorMessage('');
         // Limpiar todos los estados relacionados con el PDF antes de cargar el nuevo.
-        setSelectedFile(null); 
+        setSelectedFile(null);
         if (fileUrl) URL.revokeObjectURL(fileUrl);
-        setFileUrl(null); 
+        setFileUrl(null);
         setNumPages(null);
         setPageNumber(1);
         setScale(1.0);
@@ -216,7 +218,9 @@ function App() {
         setShowSignatureBox2(false);
         setShowSignatureBox3(false);
         setSignatureBox1Pos({ x: 0, y: 0 });
-        setSignatureBox1Size({ width: 200, height: 100 });
+        // >>> MODIFICACIÓN: Se inicializa el tamaño del recuadro de firma aquí también <<<
+        setSignatureBox1Size({ width: 300, height: 150 });
+        // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
         setIsDraggingBox(false);
         setIsResizingBox(false);
         setHasSignatureApplied(false);
@@ -227,7 +231,7 @@ function App() {
         const newId = generateUniqueId();
         setProcessId(newId);
         window.location.hash = `proceso=${newId}`;
-        
+
         if (file) {
             const MAX_FILE_SIZE_MB = 48;
             const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -278,6 +282,7 @@ function App() {
             const pdfLeftInViewer = (pdfPageRect.left - viewerRect.left) + scrollX;
             const pdfTopInViewer = (pdfPageRect.top - viewerRect.top) + scrollY;
 
+            // Usa el tamaño inicial definido en el estado para el cálculo de posicionamiento
             const defaultWidth = Math.min(signatureBox1Size.width, pdfPageRect.width * 0.8);
             const defaultHeight = Math.min(signatureBox1Size.height, pdfPageRect.height * 0.8);
 
@@ -311,8 +316,8 @@ function App() {
         pageNumber,
         scale,
         pdfDocProxyRef,
-        signatureBox1Size.width,
-        signatureBox1Size.height
+        signatureBox1Size.width, // Dependencia para que se re-evalúe si cambia el tamaño inicial
+        signatureBox1Size.height // Dependencia para que se re-evalúe si cambia el tamaño inicial
     ]);
 
 
@@ -325,15 +330,13 @@ function App() {
                 const measuredWidth = modalCanvasDrawingAreaRef.current.clientWidth;
                 const measuredHeight = modalCanvasDrawingAreaRef.current.clientHeight;
 
-                // ***** MODIFICACIÓN CLAVE AQUÍ: Factor de resolución para la firma *****
-                // Se cambió de 2 a 3 para mayor nitidez. Puedes probar con 4 si es necesario.
-                const resolutionFactor = 3; 
+                // Factor de resolución para la firma (se puede ajustar si se necesita más nitidez)
+                const resolutionFactor = 3;
                 const highResWidth = measuredWidth * resolutionFactor;
                 const highResHeight = measuredHeight * resolutionFactor;
-                // **********************************************************************
 
                 if (measuredWidth > 0 && measuredHeight > 0) {
-                    setSigCanvasWidth(highResWidth); 
+                    setSigCanvasWidth(highResWidth);
                     setSigCanvasHeight(highResHeight);
                     console.log("Canvas de firma medido (lógico):", { width: highResWidth, height: highResHeight });
                     console.log("Canvas de firma visible (CSS):", { width: measuredWidth, height: measuredHeight });
@@ -342,7 +345,7 @@ function App() {
                         const canvas = sigCanvasRef.current.canvas;
                         if (canvas) {
                             if (canvas.width !== highResWidth || canvas.height !== highResHeight) {
-                                canvas.width = highResWidth; 
+                                canvas.width = highResWidth;
                                 canvas.height = highResHeight;
                                 const ctx = canvas.getContext('2d');
                                 ctx.scale(resolutionFactor, resolutionFactor);
@@ -567,7 +570,7 @@ function App() {
         isDragging, isResizingBox, isDraggingBox, initialPinchDistance,
         startX, startY, scrollLeftInitial, scrollTopInitial, initialPinchScale,
         initialBoxRect, initialMousePos, resizeHandleType,
-        signatureBox1Pos, 
+        signatureBox1Pos,
         signatureBox1Size, boxDragOffsetX, boxDragOffsetY
     ]);
 
@@ -830,17 +833,17 @@ function App() {
             setTimeout(() => setErrorMessage(''), 3000);
             return;
         }
-        
+
         let idToSave = processId;
         if (!idToSave) {
             // Esto es una precaución. Si processId es null aquí, es un error de estado.
             // Debería estar ya generado por handleFileChange o el useEffect inicial.
             idToSave = generateUniqueId();
-            setProcessId(idToSave); 
+            setProcessId(idToSave);
             window.location.hash = `proceso=${idToSave}`; // Asegura que la URL tenga el ID
         }
 
-        if (!userId) { 
+        if (!userId) {
             setErrorMessage('Error: ID de usuario no disponible. Intenta recargar la página.');
             setTimeout(() => setErrorMessage(''), 7000);
             return;
@@ -866,7 +869,7 @@ function App() {
                 .from('process_states')
                 .upsert(
                     {
-                        id: idToSave, 
+                        id: idToSave,
                         user_id: userId,
                         state_data: processState,
                     },
@@ -876,7 +879,7 @@ function App() {
             if (error) {
                 throw error;
             }
-            
+
             // Asegúrate de que la URL se actualice correctamente si processId cambió aquí
             const currentUrlHash = window.location.hash;
             if (currentUrlHash !== `#proceso=${idToSave}`) {
@@ -1031,7 +1034,7 @@ function App() {
                             <Document
                                 // La clave fuerza a React a re-renderizar el componente Document
                                 // cuando el fileUrl cambia, lo que es crucial para react-pdf.
-                                key={fileUrl} 
+                                key={fileUrl}
                                 file={fileUrl}
                                 onLoadSuccess={onDocumentLoadSuccess}
                                 onLoadError={console.error}
@@ -1125,9 +1128,11 @@ function App() {
                                     height: sigCanvasHeight,
                                 }}
                                 penColor='black'
-                                minWidth={1} // Se mantiene en 1
-                                maxWidth={2} // Se mantiene en 2
-                                backgroundColor='rgba(0,0,0,0)'
+                                // >>> MODIFICACIÓN: Valores ajustados para un trazo más grueso <<<
+                                minWidth={2.5} // Aumentado para un trazo base más grueso
+                                maxWidth={5}   // Aumentado para el máximo grosor del trazo
+                                // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+                                backgroundColor='rgba(0,0,0,0)' // Mantenido transparente para que no afecte
                                 onBegin={() => setErrorMessage('')}
                             />
                         </div>
@@ -1177,5 +1182,5 @@ function App() {
         </div>
     );
 }
- 
+
 export default App;
